@@ -19,7 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -29,8 +28,8 @@ import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
 
-    private var screenTimeMinutes by mutableLongStateOf(0)
-    private var materialCount by mutableLongStateOf(0)
+    private var screenTimeMinutes by mutableStateOf(0L)
+    private var materialCount by mutableStateOf(0L)
     private var message by mutableStateOf("使用時間を取得してください")
 
     private val targetMinutes = 120L
@@ -56,7 +55,11 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(text = "今日の使用時間：${screenTimeMinutes}分")
+                    Text(text = "目標時間：${targetMinutes}分")
                     Text(text = "獲得素材：${materialCount}個")
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     Text(text = message)
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -105,12 +108,22 @@ class MainActivity : ComponentActivity() {
         }
 
         val minutes = getTodayScreenTimeMinutes()
+
         val savedMinutes = targetMinutes - minutes
-        val material = if (savedMinutes > 0) savedMinutes / materialRate else 0
+        val material = if (savedMinutes > 0) {
+            savedMinutes / materialRate
+        } else {
+            0
+        }
 
         screenTimeMinutes = minutes
         materialCount = material
-        message = "目標${targetMinutes}分に対して${savedMinutes}分節約"
+
+        message = if (savedMinutes > 0) {
+            "${savedMinutes}分節約できました"
+        } else {
+            "今日は目標時間を超えています"
+        }
     }
 
     private fun getTodayScreenTimeMinutes(): Long {
