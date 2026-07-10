@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -29,13 +31,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.util.Calendar
 
+data class Ticket(
+    val name: String,
+    val status: String
+)
+
 class MainActivity : ComponentActivity() {
 
     private var screenTimeMinutes by mutableLongStateOf(0L)
     private var materialCount by mutableLongStateOf(0L)
     private var message by mutableStateOf("使用時間を取得してください")
 
-    private val tickets = mutableStateListOf<String>()
+    private val tickets = mutableStateListOf<Ticket>()
 
     private val targetMinutes = 120L
     private val materialRate = 10L
@@ -48,10 +55,13 @@ class MainActivity : ComponentActivity() {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Top
                 ) {
+                    Spacer(modifier = Modifier.height(24.dp))
+
                     Text(
                         text = "デットブリックス",
                         style = MaterialTheme.typography.headlineMedium
@@ -119,7 +129,7 @@ class MainActivity : ComponentActivity() {
                         Text("素材8個 → 背景変更券")
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
                         text = "所持チケット",
@@ -131,19 +141,41 @@ class MainActivity : ComponentActivity() {
                     if (tickets.isEmpty()) {
                         Text("まだチケットはありません")
                     } else {
-                        tickets.forEach { ticket ->
+                        tickets.forEachIndexed { index, ticket ->
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
+                                    .padding(vertical = 6.dp)
                             ) {
-                                Text(
-                                    text = ticket,
+                                Column(
                                     modifier = Modifier.padding(12.dp)
-                                )
+                                ) {
+                                    Text(text = ticket.name)
+                                    Text(text = "状態：${ticket.status}")
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Button(
+                                        onClick = { requestApproval(index) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("親に承認申請する")
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Button(
+                                        onClick = { approveTicket(index) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("親が承認する")
+                                    }
+                                }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -190,11 +222,36 @@ class MainActivity : ComponentActivity() {
     private fun craftTicket(ticketName: String, cost: Long) {
         if (materialCount >= cost) {
             materialCount -= cost
-            tickets.add(ticketName)
+            tickets.add(
+                Ticket(
+                    name = ticketName,
+                    status = "未申請"
+                )
+            )
             message = "${ticketName}をクラフトしました"
         } else {
             message = "素材が足りません"
         }
+    }
+
+    private fun requestApproval(index: Int) {
+        val ticket = tickets[index]
+
+        tickets[index] = ticket.copy(
+            status = "承認待ち"
+        )
+
+        message = "${ticket.name}を親に承認申請しました"
+    }
+
+    private fun approveTicket(index: Int) {
+        val ticket = tickets[index]
+
+        tickets[index] = ticket.copy(
+            status = "承認済み"
+        )
+
+        message = "${ticket.name}が承認されました"
     }
 
     private fun getTodayScreenTimeMinutes(): Long {
