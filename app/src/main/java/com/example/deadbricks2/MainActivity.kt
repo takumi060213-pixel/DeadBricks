@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +20,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -36,13 +39,26 @@ data class Ticket(
     val status: String
 )
 
+data class DailyTask(
+    val title: String,
+    val completed: Boolean
+)
+
 class MainActivity : ComponentActivity() {
 
     private var screenTimeMinutes by mutableLongStateOf(0L)
     private var materialCount by mutableLongStateOf(0L)
     private var message by mutableStateOf("使用時間を取得してください")
 
+    private var taskInput by mutableStateOf("")
+
     private val tickets = mutableStateListOf<Ticket>()
+
+    private val tasks = mutableStateListOf(
+        DailyTask("宿題をする", false),
+        DailyTask("明日の準備をする", false),
+        DailyTask("歯みがきをする", false)
+    )
 
     private val targetMinutes = 120L
     private val materialRate = 10L
@@ -72,9 +88,6 @@ class MainActivity : ComponentActivity() {
                     Text(text = "今日の使用時間：${screenTimeMinutes}分")
                     Text(text = "目標時間：${targetMinutes}分")
                     Text(text = "素材：${materialCount}個")
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     Text(text = message)
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -176,6 +189,66 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "日々のタスクボード",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = taskInput,
+                        onValueChange = { taskInput = it },
+                        label = { Text("追加するタスク") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { addTask() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("タスクを追加")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    tasks.forEachIndexed { index, task ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = task.completed,
+                                    onCheckedChange = {
+                                        toggleTask(index)
+                                    }
+                                )
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(text = task.title)
+                                    Text(
+                                        text = if (task.completed) {
+                                            "完了"
+                                        } else {
+                                            "未完了"
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -252,6 +325,35 @@ class MainActivity : ComponentActivity() {
         )
 
         message = "${ticket.name}が承認されました"
+    }
+
+    private fun addTask() {
+        if (taskInput.isNotBlank()) {
+            tasks.add(
+                DailyTask(
+                    title = taskInput,
+                    completed = false
+                )
+            )
+            message = "タスクを追加しました"
+            taskInput = ""
+        } else {
+            message = "タスク名を入力してください"
+        }
+    }
+
+    private fun toggleTask(index: Int) {
+        val task = tasks[index]
+
+        tasks[index] = task.copy(
+            completed = !task.completed
+        )
+
+        message = if (!task.completed) {
+            "${task.title}を完了しました"
+        } else {
+            "${task.title}を未完了に戻しました"
+        }
     }
 
     private fun getTodayScreenTimeMinutes(): Long {
