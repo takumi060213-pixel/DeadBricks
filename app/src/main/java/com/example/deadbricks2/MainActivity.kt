@@ -16,9 +16,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,9 +31,11 @@ import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
 
-    private var screenTimeMinutes by mutableStateOf(0L)
-    private var materialCount by mutableStateOf(0L)
+    private var screenTimeMinutes by mutableLongStateOf(0L)
+    private var materialCount by mutableLongStateOf(0L)
     private var message by mutableStateOf("使用時間を取得してください")
+
+    private val tickets = mutableStateListOf<String>()
 
     private val targetMinutes = 120L
     private val materialRate = 10L
@@ -52,36 +57,92 @@ class MainActivity : ComponentActivity() {
                         style = MaterialTheme.typography.headlineMedium
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Text(text = "今日の使用時間：${screenTimeMinutes}分")
                     Text(text = "目標時間：${targetMinutes}分")
-                    Text(text = "獲得素材：${materialCount}個")
+                    Text(text = "素材：${materialCount}個")
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(text = message)
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
-                        onClick = {
-                            openUsageAccessSettings()
-                        },
+                        onClick = { openUsageAccessSettings() },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("使用状況アクセスを許可する")
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Button(
-                        onClick = {
-                            updateScreenTime()
-                        },
+                        onClick = { updateScreenTime() },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("使用時間を更新する")
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "クラフト",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { craftTicket("おやつ豪華になる券", 5) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("素材5個 → おやつ豪華になる券")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { craftTicket("お小遣い10円券", 10) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("素材10個 → お小遣い10円券")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { craftTicket("背景変更券", 8) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("素材8個 → 背景変更券")
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "所持チケット",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (tickets.isEmpty()) {
+                        Text("まだチケットはありません")
+                    } else {
+                        tickets.forEach { ticket ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = ticket,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -126,12 +187,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun craftTicket(ticketName: String, cost: Long) {
+        if (materialCount >= cost) {
+            materialCount -= cost
+            tickets.add(ticketName)
+            message = "${ticketName}をクラフトしました"
+        } else {
+            message = "素材が足りません"
+        }
+    }
+
     private fun getTodayScreenTimeMinutes(): Long {
         val usageStatsManager =
             getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
         val calendar = Calendar.getInstance()
-
         val endTime = calendar.timeInMillis
 
         calendar.set(Calendar.HOUR_OF_DAY, 0)
