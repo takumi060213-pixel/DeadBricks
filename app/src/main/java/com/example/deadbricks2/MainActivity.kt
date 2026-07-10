@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.Calendar
 
 data class Ticket(
@@ -82,6 +83,29 @@ class MainActivity : ComponentActivity() {
                         text = "デットブリックス",
                         style = MaterialTheme.typography.headlineMedium
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = getAnimalFace(),
+                                fontSize = 64.sp
+                            )
+
+                            Text(
+                                text = getAnimalState(),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+
+                            Text(text = getAnimalMessage())
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -289,6 +313,33 @@ class MainActivity : ComponentActivity() {
             "${savedMinutes}分節約できました"
         } else {
             "今日は目標時間を超えています"
+        }
+    }
+
+    private fun getAnimalFace(): String {
+        return when {
+            materialCount >= 10 -> "🐼✨"
+            materialCount >= 5 -> "🐼"
+            materialCount >= 1 -> "🐼💧"
+            else -> "🐼💤"
+        }
+    }
+
+    private fun getAnimalState(): String {
+        return when {
+            materialCount >= 10 -> "元気いっぱい"
+            materialCount >= 5 -> "元気"
+            materialCount >= 1 -> "少し疲れている"
+            else -> "しょんぼり"
+        }
+    }
+
+    private fun getAnimalMessage(): String {
+        return when {
+            materialCount >= 10 -> "今日はたくさんスマホを我慢できたね！"
+            materialCount >= 5 -> "いい感じに頑張れています"
+            materialCount >= 1 -> "少しだけ素材をゲットできました"
+            else -> "明日は素材を集めよう"
         }
     }
 
