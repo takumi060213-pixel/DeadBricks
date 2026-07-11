@@ -67,7 +67,10 @@ class MainActivity : ComponentActivity() {
         DailyTask("歯みがきをする", false)
     )
 
-    private val targetMinutes = 120L
+    private var targetMinutes by mutableLongStateOf(120L)
+    private var targetInput by mutableStateOf("120")
+    private var isParentMode by mutableStateOf(false)
+
     private val materialRate = 10L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,6 +91,35 @@ class MainActivity : ComponentActivity() {
                     Text(
                         text = "デットブリックス",
                         style = MaterialTheme.typography.headlineMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Button(
+                            onClick = { isParentMode = false }
+                        ) {
+                            Text("子供画面")
+                        }
+
+                        Button(
+                            onClick = { isParentMode = true }
+                        ) {
+                            Text("親画面")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = if (isParentMode) {
+                            "現在：親画面"
+                        } else {
+                            "現在：子供画面"
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -119,6 +151,42 @@ class MainActivity : ComponentActivity() {
                     Text(text = "目標時間：${targetMinutes}分")
                     Text(text = "素材：${materialCount}個")
                     Text(text = message)
+
+                    if (isParentMode) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "親用設定",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                OutlinedTextField(
+                                    value = targetInput,
+                                    onValueChange = { targetInput = it },
+                                    label = { Text("1日の目標時間（分）") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Button(
+                                    onClick = { updateTargetTime() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("目標時間を設定する")
+                                }
+                            }
+                        }
+                    }
+
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -304,6 +372,22 @@ class MainActivity : ComponentActivity() {
     private fun openUsageAccessSettings() {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         startActivity(intent)
+    }
+
+    private fun updateTargetTime() {
+        val newTarget = targetInput.toLongOrNull()
+
+        if (newTarget == null || newTarget <= 0) {
+            message = "正しい目標時間を入力してください"
+            return
+        }
+
+        targetMinutes = newTarget
+        message = "目標時間を${targetMinutes}分に設定しました"
+
+        if (hasUsageStatsPermission()) {
+            updateScreenTime()
+        }
     }
 
     private fun updateScreenTime() {
