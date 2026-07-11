@@ -34,6 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 data class Ticket(
     val name: String,
@@ -46,6 +50,8 @@ data class DailyTask(
 )
 
 class MainActivity : ComponentActivity() {
+
+    private val db = FirebaseFirestore.getInstance()
 
     private var screenTimeMinutes by mutableLongStateOf(0L)
     private var materialCount by mutableLongStateOf(0L)
@@ -130,6 +136,15 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("使用時間を更新する")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { saveToFirebase() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Firebaseに保存する")
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -405,6 +420,49 @@ class MainActivity : ComponentActivity() {
         } else {
             "${task.title}を未完了に戻しました"
         }
+    }
+
+    private fun saveToFirebase() {
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
+            .format(System.currentTimeMillis())
+
+        val ticketList = tickets.map {
+            mapOf(
+                "name" to it.name,
+                "status" to it.status
+            )
+        }
+
+        val taskList = tasks.map {
+            mapOf(
+                "title" to it.title,
+                "completed" to it.completed
+            )
+        }
+
+        val data = hashMapOf(
+            "date" to date,
+            "screenTimeMinutes" to screenTimeMinutes,
+            "targetMinutes" to targetMinutes,
+            "materialCount" to materialCount,
+            "tickets" to ticketList,
+            "tasks" to taskList,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
+        db.collection("families")
+            .document("demoFamily")
+            .collection("children")
+            .document("testChild")
+            .collection("dailyRecords")
+            .document(date)
+            .set(data)
+            .addOnSuccessListener {
+                message = "Firebaseに保存しました"
+            }
+            .addOnFailureListener {
+                message = "Firebase保存に失敗しました"
+            }
     }
 
     private fun getTodayScreenTimeMinutes(): Long {
