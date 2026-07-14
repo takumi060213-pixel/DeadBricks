@@ -228,6 +228,15 @@ class MainActivity : ComponentActivity() {
                         Text("Firebaseに保存する")
                     }
 
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { loadFromFirebase() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Firebaseから読み込む")
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
@@ -732,6 +741,95 @@ class MainActivity : ComponentActivity() {
             .addOnFailureListener {
                 message = "Firebase保存に失敗しました"
             }
+    }
+
+    private fun loadFromFirebase() {
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
+            .format(System.currentTimeMillis())
+
+        db.collection("families")
+            .document("demoFamily")
+            .collection("children")
+            .document("testChild")
+            .collection("dailyRecords")
+            .document(date)
+            .get()
+            .addOnSuccessListener { document ->
+                if (!document.exists()) {
+                    message = "今日のデータはまだ保存されていません"
+                    return@addOnSuccessListener
+                }
+
+                screenTimeMinutes = document.getLong("screenTimeMinutes") ?: 0L
+                targetMinutes = document.getLong("targetMinutes") ?: 120L
+                materialCount = document.getLong("materialCount") ?: 0L
+                targetInput = targetMinutes.toString()
+
+                tickets.clear()
+                tasks.clear()
+                familyMembers.clear()
+
+                val ticketList = document.get("tickets") as? List<*>
+                ticketList?.forEach { item ->
+                    val map = item as? Map<*, *>
+                    val name = map?.get("name") as? String ?: return@forEach
+                    val status = map["status"] as? String ?: "未申請"
+
+                    tickets.add(
+                        Ticket(
+                            name = name,
+                            status = status
+                        )
+                    )
+                }
+
+                val taskList = document.get("tasks") as? List<*>
+                taskList?.forEach { item ->
+                    val map = item as? Map<*, *>
+                    val title = map?.get("title") as? String ?: return@forEach
+                    val completed = map["completed"] as? Boolean ?: false
+
+                    tasks.add(
+                        DailyTask(
+                            title = title,
+                            completed = completed
+                        )
+                    )
+                }
+
+                val familyList = document.get("familyMembers") as? List<*>
+                familyList?.forEach { item ->
+                    val map = item as? Map<*, *>
+                    val name = map?.get("name") as? String ?: return@forEach
+                    val screenTime = toLongValue(map["screenTime"])
+                    val targetTime = toLongValue(map["targetTime"])
+                    val material = toLongValue(map["material"])
+
+                    familyMembers.add(
+                        FamilyMember(
+                            name = name,
+                            screenTime = screenTime,
+                            targetTime = targetTime,
+                            material = material
+                        )
+                    )
+                }
+
+                message = "Firebaseから読み込みました"
+            }
+            .addOnFailureListener {
+                message = "Firebase読み込みに失敗しました"
+            }
+    }
+
+    private fun toLongValue(value: Any?): Long {
+        return when (value) {
+            is Long -> value
+            is Int -> value.toLong()
+            is Double -> value.toLong()
+            is String -> value.toLongOrNull() ?: 0L
+            else -> 0L
+        }
     }
 
     private fun getTodayScreenTimeMinutes(): Long {
