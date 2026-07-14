@@ -33,10 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.Calendar
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 data class Ticket(
@@ -47,6 +47,13 @@ data class Ticket(
 data class DailyTask(
     val title: String,
     val completed: Boolean
+)
+
+data class FamilyMember(
+    val name: String,
+    val screenTime: Long,
+    val targetTime: Long,
+    val material: Long
 )
 
 class MainActivity : ComponentActivity() {
@@ -70,6 +77,13 @@ class MainActivity : ComponentActivity() {
     private var targetMinutes by mutableLongStateOf(120L)
     private var targetInput by mutableStateOf("120")
     private var isParentMode by mutableStateOf(false)
+
+    private var familyNameInput by mutableStateOf("")
+    private var familyScreenTimeInput by mutableStateOf("")
+    private var familyTargetTimeInput by mutableStateOf("")
+    private var familyMaterialInput by mutableStateOf("")
+
+    private val familyMembers = mutableStateListOf<FamilyMember>()
 
     private val materialRate = 10L
 
@@ -186,7 +200,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -356,6 +369,106 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "家族コミュニティ",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = familyNameInput,
+                        onValueChange = { familyNameInput = it },
+                        label = { Text("家族の名前") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = familyScreenTimeInput,
+                        onValueChange = { familyScreenTimeInput = it },
+                        label = { Text("使用時間（分）") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = familyTargetTimeInput,
+                        onValueChange = { familyTargetTimeInput = it },
+                        label = { Text("目標時間（分）") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = familyMaterialInput,
+                        onValueChange = { familyMaterialInput = it },
+                        label = { Text("素材数") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { addFamilyMember() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("家族を追加")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { addMyDataToFamily() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("自分のデータを家族に追加")
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (familyMembers.isEmpty()) {
+                        Text("まだ家族は登録されていません")
+                    } else {
+                        familyMembers.forEachIndexed { index, member ->
+                            val achievementRate = if (member.targetTime > 0) {
+                                ((member.targetTime - member.screenTime) * 100 / member.targetTime)
+                            } else {
+                                0
+                            }
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
+                                    Text(text = member.name)
+                                    Text(text = "使用時間：${member.screenTime}分")
+                                    Text(text = "目標時間：${member.targetTime}分")
+                                    Text(text = "節約達成率：${achievementRate}%")
+                                    Text(text = "素材：${member.material}個")
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Button(
+                                        onClick = { removeFamilyMember(index) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("削除")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -506,6 +619,68 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun addFamilyMember() {
+        val name = familyNameInput
+        val screenTime = familyScreenTimeInput.toLongOrNull()
+        val targetTime = familyTargetTimeInput.toLongOrNull()
+        val material = familyMaterialInput.toLongOrNull()
+
+        if (name.isBlank()) {
+            message = "家族の名前を入力してください"
+            return
+        }
+
+        if (screenTime == null || screenTime < 0) {
+            message = "使用時間を正しく入力してください"
+            return
+        }
+
+        if (targetTime == null || targetTime <= 0) {
+            message = "目標時間を正しく入力してください"
+            return
+        }
+
+        if (material == null || material < 0) {
+            message = "素材数を正しく入力してください"
+            return
+        }
+
+        familyMembers.add(
+            FamilyMember(
+                name = name,
+                screenTime = screenTime,
+                targetTime = targetTime,
+                material = material
+            )
+        )
+
+        familyNameInput = ""
+        familyScreenTimeInput = ""
+        familyTargetTimeInput = ""
+        familyMaterialInput = ""
+
+        message = "${name}を家族に追加しました"
+    }
+
+    private fun addMyDataToFamily() {
+        familyMembers.add(
+            FamilyMember(
+                name = "自分",
+                screenTime = screenTimeMinutes,
+                targetTime = targetMinutes,
+                material = materialCount
+            )
+        )
+
+        message = "自分のデータを家族に追加しました"
+    }
+
+    private fun removeFamilyMember(index: Int) {
+        val name = familyMembers[index].name
+        familyMembers.removeAt(index)
+        message = "${name}を削除しました"
+    }
+
     private fun saveToFirebase() {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
             .format(System.currentTimeMillis())
@@ -524,6 +699,15 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        val familyList = familyMembers.map {
+            mapOf(
+                "name" to it.name,
+                "screenTime" to it.screenTime,
+                "targetTime" to it.targetTime,
+                "material" to it.material
+            )
+        }
+
         val data = hashMapOf(
             "date" to date,
             "screenTimeMinutes" to screenTimeMinutes,
@@ -531,6 +715,7 @@ class MainActivity : ComponentActivity() {
             "materialCount" to materialCount,
             "tickets" to ticketList,
             "tasks" to taskList,
+            "familyMembers" to familyList,
             "updatedAt" to FieldValue.serverTimestamp()
         )
 
