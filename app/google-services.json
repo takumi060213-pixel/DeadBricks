@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "881819079614",
+    "project_id": "deadbricks",
+    "storage_bucket": "deadbricks.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:881819079614:android:d6eaba6bfcab6cb9e61fef",
+        "android_client_info": {
+          "package_name": "com.example.deadbricks2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqAlsz5tTdFXqYTayUAxV78-Dxr2FYzTI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
