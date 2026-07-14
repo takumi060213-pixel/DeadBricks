@@ -24,6 +24,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -60,11 +61,22 @@ class MainActivity : ComponentActivity() {
 
     private val db = FirebaseFirestore.getInstance()
 
+    private var currentScreen by mutableStateOf("home")
+
     private var screenTimeMinutes by mutableLongStateOf(0L)
     private var materialCount by mutableLongStateOf(0L)
     private var message by mutableStateOf("使用時間を取得してください")
 
+    private var targetMinutes by mutableLongStateOf(120L)
+    private var targetInput by mutableStateOf("120")
+    private var isParentMode by mutableStateOf(false)
+
     private var taskInput by mutableStateOf("")
+
+    private var familyNameInput by mutableStateOf("")
+    private var familyScreenTimeInput by mutableStateOf("")
+    private var familyTargetTimeInput by mutableStateOf("")
+    private var familyMaterialInput by mutableStateOf("")
 
     private val tickets = mutableStateListOf<Ticket>()
 
@@ -73,15 +85,6 @@ class MainActivity : ComponentActivity() {
         DailyTask("明日の準備をする", false),
         DailyTask("歯みがきをする", false)
     )
-
-    private var targetMinutes by mutableLongStateOf(120L)
-    private var targetInput by mutableStateOf("120")
-    private var isParentMode by mutableStateOf(false)
-
-    private var familyNameInput by mutableStateOf("")
-    private var familyScreenTimeInput by mutableStateOf("")
-    private var familyTargetTimeInput by mutableStateOf("")
-    private var familyMaterialInput by mutableStateOf("")
 
     private val familyMembers = mutableStateListOf<FamilyMember>()
 
@@ -109,372 +112,15 @@ class MainActivity : ComponentActivity() {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Button(
-                            onClick = { isParentMode = false }
-                        ) {
-                            Text("子供画面")
-                        }
-
-                        Button(
-                            onClick = { isParentMode = true }
-                        ) {
-                            Text("親画面")
-                        }
-                    }
+                    ScreenButtons()
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        text = if (isParentMode) {
-                            "現在：親画面"
-                        } else {
-                            "現在：子供画面"
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = getAnimalFace(),
-                                fontSize = 64.sp
-                            )
-
-                            Text(
-                                text = getAnimalState(),
-                                style = MaterialTheme.typography.titleLarge
-                            )
-
-                            Text(text = getAnimalMessage())
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(text = "今日の使用時間：${screenTimeMinutes}分")
-                    Text(text = "目標時間：${targetMinutes}分")
-                    Text(text = "素材：${materialCount}個")
-                    Text(text = message)
-
-                    if (isParentMode) {
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    text = "親用設定",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                OutlinedTextField(
-                                    value = targetInput,
-                                    onValueChange = { targetInput = it },
-                                    label = { Text("1日の目標時間（分）") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Button(
-                                    onClick = { updateTargetTime() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("目標時間を設定する")
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = { openUsageAccessSettings() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("使用状況アクセスを許可する")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { updateScreenTime() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("使用時間を更新する")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { saveToFirebase() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Firebaseに保存する")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { loadFromFirebase() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Firebaseから読み込む")
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = "クラフト",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { craftTicket("おやつ豪華になる券", 5) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("素材5個 → おやつ豪華になる券")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { craftTicket("お小遣い10円券", 10) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("素材10個 → お小遣い10円券")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { craftTicket("背景変更券", 8) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("素材8個 → 背景変更券")
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = "所持チケット",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (tickets.isEmpty()) {
-                        Text("まだチケットはありません")
-                    } else {
-                        tickets.forEachIndexed { index, ticket ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp)
-                                ) {
-                                    Text(text = ticket.name)
-                                    Text(text = "状態：${ticket.status}")
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Button(
-                                        onClick = { requestApproval(index) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("親に承認申請する")
-                                    }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    Button(
-                                        onClick = { approveTicket(index) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("親が承認する")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = "日々のタスクボード",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = taskInput,
-                        onValueChange = { taskInput = it },
-                        label = { Text("追加するタスク") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { addTask() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("タスクを追加")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    tasks.forEachIndexed { index, task ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = task.completed,
-                                    onCheckedChange = {
-                                        toggleTask(index)
-                                    }
-                                )
-
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(text = task.title)
-                                    Text(
-                                        text = if (task.completed) {
-                                            "完了"
-                                        } else {
-                                            "未完了"
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = "家族コミュニティ",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = familyNameInput,
-                        onValueChange = { familyNameInput = it },
-                        label = { Text("家族の名前") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = familyScreenTimeInput,
-                        onValueChange = { familyScreenTimeInput = it },
-                        label = { Text("使用時間（分）") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = familyTargetTimeInput,
-                        onValueChange = { familyTargetTimeInput = it },
-                        label = { Text("目標時間（分）") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = familyMaterialInput,
-                        onValueChange = { familyMaterialInput = it },
-                        label = { Text("素材数") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { addFamilyMember() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("家族を追加")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { addMyDataToFamily() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("自分のデータを家族に追加")
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (familyMembers.isEmpty()) {
-                        Text("まだ家族は登録されていません")
-                    } else {
-                        familyMembers.forEachIndexed { index, member ->
-                            val achievementRate = if (member.targetTime > 0) {
-                                ((member.targetTime - member.screenTime) * 100 / member.targetTime)
-                            } else {
-                                0
-                            }
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp)
-                                ) {
-                                    Text(text = member.name)
-                                    Text(text = "使用時間：${member.screenTime}分")
-                                    Text(text = "目標時間：${member.targetTime}分")
-                                    Text(text = "節約達成率：${achievementRate}%")
-                                    Text(text = "素材：${member.material}個")
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Button(
-                                        onClick = { removeFamilyMember(index) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("削除")
-                                    }
-                                }
-                            }
-                        }
+                    when (currentScreen) {
+                        "home" -> HomeScreen()
+                        "craft" -> CraftScreen()
+                        "task" -> TaskScreen()
+                        "family" -> FamilyScreen()
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -488,6 +134,427 @@ class MainActivity : ComponentActivity() {
 
         if (hasUsageStatsPermission()) {
             updateScreenTime()
+        }
+    }
+
+    @Composable
+    private fun ScreenButtons() {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(onClick = { currentScreen = "home" }) {
+                    Text("ホーム")
+                }
+
+                Button(onClick = { currentScreen = "craft" }) {
+                    Text("クラフト")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(onClick = { currentScreen = "task" }) {
+                    Text("タスク")
+                }
+
+                Button(onClick = { currentScreen = "family" }) {
+                    Text("家族")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun HomeScreen() {
+        Text(
+            text = "ホーム",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Button(
+                onClick = { isParentMode = false }
+            ) {
+                Text("子供画面")
+            }
+
+            Button(
+                onClick = { isParentMode = true }
+            ) {
+                Text("親画面")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = if (isParentMode) {
+                "現在：親画面"
+            } else {
+                "現在：子供画面"
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = getAnimalFace(),
+                    fontSize = 64.sp
+                )
+
+                Text(
+                    text = getAnimalState(),
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Text(text = getAnimalMessage())
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(text = "今日の使用時間：${screenTimeMinutes}分")
+        Text(text = "目標時間：${targetMinutes}分")
+        Text(text = "素材：${materialCount}個")
+        Text(text = message)
+
+        if (isParentMode) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "親用設定",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = targetInput,
+                        onValueChange = { targetInput = it },
+                        label = { Text("1日の目標時間（分）") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { updateTargetTime() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("目標時間を設定する")
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = { openUsageAccessSettings() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("使用状況アクセスを許可する")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { updateScreenTime() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("使用時間を更新する")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { saveToFirebase() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Firebaseに保存する")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { loadFromFirebase() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Firebaseから読み込む")
+        }
+    }
+
+    @Composable
+    private fun CraftScreen() {
+        Text(
+            text = "クラフト",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(text = "現在の素材：${materialCount}個")
+        Text(text = message)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = { craftTicket("おやつ豪華になる券", 5) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("素材5個 → おやつ豪華になる券")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { craftTicket("お小遣い10円券", 10) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("素材10個 → お小遣い10円券")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { craftTicket("背景変更券", 8) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("素材8個 → 背景変更券")
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "所持チケット",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (tickets.isEmpty()) {
+            Text("まだチケットはありません")
+        } else {
+            tickets.forEachIndexed { index, ticket ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(text = ticket.name)
+                        Text(text = "状態：${ticket.status}")
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = { requestApproval(index) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("親に承認申請する")
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Button(
+                            onClick = { approveTicket(index) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("親が承認する")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun TaskScreen() {
+        Text(
+            text = "日々のタスクボード",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = taskInput,
+            onValueChange = { taskInput = it },
+            label = { Text("追加するタスク") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { addTask() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("タスクを追加")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        tasks.forEachIndexed { index, task ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = task.completed,
+                        onCheckedChange = {
+                            toggleTask(index)
+                        }
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(text = task.title)
+                        Text(
+                            text = if (task.completed) {
+                                "完了"
+                            } else {
+                                "未完了"
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun FamilyScreen() {
+        Text(
+            text = "家族コミュニティ",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = familyNameInput,
+            onValueChange = { familyNameInput = it },
+            label = { Text("家族の名前") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = familyScreenTimeInput,
+            onValueChange = { familyScreenTimeInput = it },
+            label = { Text("使用時間（分）") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = familyTargetTimeInput,
+            onValueChange = { familyTargetTimeInput = it },
+            label = { Text("目標時間（分）") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = familyMaterialInput,
+            onValueChange = { familyMaterialInput = it },
+            label = { Text("素材数") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { addFamilyMember() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("家族を追加")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { addMyDataToFamily() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("自分のデータを家族に追加")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (familyMembers.isEmpty()) {
+            Text("まだ家族は登録されていません")
+        } else {
+            familyMembers.forEachIndexed { index, member ->
+                val achievementRate = if (member.targetTime > 0) {
+                    ((member.targetTime - member.screenTime) * 100 / member.targetTime)
+                } else {
+                    0
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(text = member.name)
+                        Text(text = "使用時間：${member.screenTime}分")
+                        Text(text = "目標時間：${member.targetTime}分")
+                        Text(text = "節約達成率：${achievementRate}%")
+                        Text(text = "素材：${member.material}個")
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = { removeFamilyMember(index) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("削除")
+                        }
+                    }
+                }
+            }
         }
     }
 
