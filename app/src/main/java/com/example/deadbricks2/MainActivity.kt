@@ -45,6 +45,11 @@ data class Ticket(
     val status: String
 )
 
+data class RewardTicketType(
+    val name: String,
+    val cost: Long
+)
+
 data class DailyTask(
     val title: String,
     val completed: Boolean
@@ -78,7 +83,16 @@ class MainActivity : ComponentActivity() {
     private var familyTargetTimeInput by mutableStateOf("")
     private var familyMaterialInput by mutableStateOf("")
 
+    private var rewardNameInput by mutableStateOf("")
+    private var rewardCostInput by mutableStateOf("")
+
     private val tickets = mutableStateListOf<Ticket>()
+
+    private val rewardTicketTypes = mutableStateListOf(
+        RewardTicketType("おやつ豪華になる券", 5),
+        RewardTicketType("お小遣い10円券", 10),
+        RewardTicketType("背景変更券", 8)
+    )
 
     private val tasks = mutableStateListOf(
         DailyTask("宿題をする", false),
@@ -322,31 +336,92 @@ class MainActivity : ComponentActivity() {
         Text(text = "現在の素材：${materialCount}個")
         Text(text = message)
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (isParentMode) {
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
-            onClick = { craftTicket("おやつ豪華になる券", 5) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("素材5個 → おやつ豪華になる券")
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "親用：報酬チケット追加",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = rewardNameInput,
+                        onValueChange = { rewardNameInput = it },
+                        label = { Text("チケット名") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = rewardCostInput,
+                        onValueChange = { rewardCostInput = it },
+                        label = { Text("必要素材数") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { addRewardTicketType() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("報酬チケットを追加")
+                    }
+                }
+            }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "作れるチケット",
+            style = MaterialTheme.typography.titleLarge
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Button(
-            onClick = { craftTicket("お小遣い10円券", 10) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("素材10個 → お小遣い10円券")
-        }
+        rewardTicketTypes.forEachIndexed { index, reward ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    Text(text = reward.name)
+                    Text(text = "必要素材：${reward.cost}個")
 
-        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-        Button(
-            onClick = { craftTicket("背景変更券", 8) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("素材8個 → 背景変更券")
+                    Button(
+                        onClick = { craftTicket(reward.name, reward.cost) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("クラフトする")
+                    }
+
+                    if (isParentMode) {
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Button(
+                            onClick = { removeRewardTicketType(index) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("この報酬を削除")
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -631,6 +706,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun addRewardTicketType() {
+        val name = rewardNameInput
+        val cost = rewardCostInput.toLongOrNull()
+
+        if (name.isBlank()) {
+            message = "チケット名を入力してください"
+            return
+        }
+
+        if (cost == null || cost <= 0) {
+            message = "必要素材数を正しく入力してください"
+            return
+        }
+
+        rewardTicketTypes.add(
+            RewardTicketType(
+                name = name,
+                cost = cost
+            )
+        )
+
+        rewardNameInput = ""
+        rewardCostInput = ""
+
+        message = "${name}を報酬チケットに追加しました"
+    }
+
+    private fun removeRewardTicketType(index: Int) {
+        val name = rewardTicketTypes[index].name
+        rewardTicketTypes.removeAt(index)
+        message = "${name}を削除しました"
+    }
+
     private fun craftTicket(ticketName: String, cost: Long) {
         if (materialCount >= cost) {
             materialCount -= cost
@@ -768,6 +876,13 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        val rewardList = rewardTicketTypes.map {
+            mapOf(
+                "name" to it.name,
+                "cost" to it.cost
+            )
+        }
+
         val taskList = tasks.map {
             mapOf(
                 "title" to it.title,
@@ -790,6 +905,7 @@ class MainActivity : ComponentActivity() {
             "targetMinutes" to targetMinutes,
             "materialCount" to materialCount,
             "tickets" to ticketList,
+            "rewardTicketTypes" to rewardList,
             "tasks" to taskList,
             "familyMembers" to familyList,
             "updatedAt" to FieldValue.serverTimestamp()
@@ -833,6 +949,7 @@ class MainActivity : ComponentActivity() {
                 targetInput = targetMinutes.toString()
 
                 tickets.clear()
+                rewardTicketTypes.clear()
                 tasks.clear()
                 familyMembers.clear()
 
@@ -848,6 +965,26 @@ class MainActivity : ComponentActivity() {
                             status = status
                         )
                     )
+                }
+
+                val rewardList = document.get("rewardTicketTypes") as? List<*>
+                rewardList?.forEach { item ->
+                    val map = item as? Map<*, *>
+                    val name = map?.get("name") as? String ?: return@forEach
+                    val cost = toLongValue(map["cost"])
+
+                    rewardTicketTypes.add(
+                        RewardTicketType(
+                            name = name,
+                            cost = cost
+                        )
+                    )
+                }
+
+                if (rewardTicketTypes.isEmpty()) {
+                    rewardTicketTypes.add(RewardTicketType("おやつ豪華になる券", 5))
+                    rewardTicketTypes.add(RewardTicketType("お小遣い10円券", 10))
+                    rewardTicketTypes.add(RewardTicketType("背景変更券", 8))
                 }
 
                 val taskList = document.get("tasks") as? List<*>
