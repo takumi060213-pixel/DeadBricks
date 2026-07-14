@@ -336,46 +336,44 @@ class MainActivity : ComponentActivity() {
         Text(text = "現在の素材：${materialCount}個")
         Text(text = message)
 
-        if (isParentMode) {
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
+                Text(
+                    text = "報酬チケット追加",
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = rewardNameInput,
+                    onValueChange = { rewardNameInput = it },
+                    label = { Text("チケット名") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = rewardCostInput,
+                    onValueChange = { rewardCostInput = it },
+                    label = { Text("必要素材数") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { addRewardTicketType() },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "親用：報酬チケット追加",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = rewardNameInput,
-                        onValueChange = { rewardNameInput = it },
-                        label = { Text("チケット名") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = rewardCostInput,
-                        onValueChange = { rewardCostInput = it },
-                        label = { Text("必要素材数") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { addRewardTicketType() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("報酬チケットを追加")
-                    }
+                    Text("報酬チケットを追加")
                 }
             }
         }
