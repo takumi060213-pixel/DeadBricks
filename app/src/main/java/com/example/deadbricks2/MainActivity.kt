@@ -463,6 +463,15 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Text("親が承認する")
                         }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Button(
+                            onClick = { useTicket(index) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("チケットを使う")
+                        }
                     }
                 }
             }
@@ -770,6 +779,21 @@ class MainActivity : ComponentActivity() {
         )
 
         message = "${ticket.name}が承認されました"
+    }
+
+    private fun useTicket(index: Int) {
+        val ticket = tickets[index]
+
+        if (ticket.status != "承認済み") {
+            message = "承認済みのチケットだけ使用できます"
+            return
+        }
+
+        tickets[index] = ticket.copy(
+            status = "使用済み"
+        )
+
+        message = "${ticket.name}を使用済みにしました"
     }
 
     private fun addTask() {
