@@ -4,6 +4,7 @@ import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -65,13 +66,6 @@ data class DailyTask(
     val completed: Boolean
 )
 
-data class FamilyMember(
-    val name: String,
-    val screenTime: Long,
-    val targetTime: Long,
-    val material: Long
-)
-
 data class DailyRecord(
     val date: String,
     val screenTimeMinutes: Long,
@@ -80,9 +74,20 @@ data class DailyRecord(
     val ticketCount: Long
 )
 
+data class RoomMember(
+    val memberId: String,
+    val memberName: String,
+    val role: String,
+    val screenTimeMinutes: Long,
+    val targetMinutes: Long,
+    val materialCount: Long,
+    val lastUpdatedDate: String
+)
+
 class MainActivity : ComponentActivity() {
 
     private val db = FirebaseFirestore.getInstance()
+    private lateinit var prefs: SharedPreferences
 
     private var currentScreen by mutableStateOf("home")
 
@@ -94,12 +99,14 @@ class MainActivity : ComponentActivity() {
     private var targetInput by mutableStateOf("60")
     private var isParentMode by mutableStateOf(false)
 
-    private var taskInput by mutableStateOf("")
+    private var roomIdInput by mutableStateOf("room001")
+    private var inviteCodeInput by mutableStateOf("")
+    private var memberIdInput by mutableStateOf("member001")
+    private var memberNameInput by mutableStateOf("たろう")
+    private var memberRole by mutableStateOf("子供")
+    private var isInFamilyRoom by mutableStateOf(false)
 
-    private var familyNameInput by mutableStateOf("")
-    private var familyScreenTimeInput by mutableStateOf("")
-    private var familyTargetTimeInput by mutableStateOf("")
-    private var familyMaterialInput by mutableStateOf("")
+    private var taskInput by mutableStateOf("")
 
     private var rewardNameInput by mutableStateOf("")
     private var rewardCostInput by mutableStateOf("")
@@ -119,8 +126,8 @@ class MainActivity : ComponentActivity() {
         DailyTask("読書（15分）", false)
     )
 
-    private val familyMembers = mutableStateListOf<FamilyMember>()
     private val historyRecords = mutableStateListOf<DailyRecord>()
+    private val roomMembers = mutableStateListOf<RoomMember>()
 
     private val materialRate = 10L
 
@@ -138,6 +145,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        prefs = getSharedPreferences("deadbricks_settings", Context.MODE_PRIVATE)
+        loadCommunitySettings()
 
         setContent {
             MaterialTheme {
@@ -194,12 +204,19 @@ class MainActivity : ComponentActivity() {
 
             Text(
                 text = if (isParentMode) {
-                    "保護者モード"
+                    "親画面"
                 } else {
-                    "子供モード"
+                    "子供画面"
                 },
                 color = textDark
             )
+
+            if (isInFamilyRoom) {
+                Text(
+                    text = "参加中のルーム：${getRoomId()}",
+                    color = textDark
+                )
+            }
         }
     }
 
@@ -234,7 +251,11 @@ class MainActivity : ComponentActivity() {
                 currentScreen = screen
 
                 if (screen == "graph") {
-                    loadHistoryFromFirebase()
+                    prepareYesterdayRecordAutomatically()
+                }
+
+                if (screen == "family") {
+                    loadRoomMembers()
                 }
             },
             colors = ButtonDefaults.buttonColors(
@@ -434,7 +455,7 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     isParentMode = false
-                    message = "子供モードにしました"
+                    message = "子供画面にしました"
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = purple),
                 shape = RoundedCornerShape(18.dp)
@@ -445,7 +466,7 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     isParentMode = true
-                    message = "保護者モードにしました"
+                    message = "親画面にしました"
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = pink),
                 shape = RoundedCornerShape(18.dp)
@@ -514,7 +535,7 @@ class MainActivity : ComponentActivity() {
             colors = ButtonDefaults.buttonColors(containerColor = green),
             shape = RoundedCornerShape(18.dp)
         ) {
-            Text("前日データを自動確認")
+            Text("前日データを再取得")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -864,7 +885,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "自動保存された前日データを表示します",
+                    text = "端末から前日データを再取得して表示します",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = textDark
@@ -885,12 +906,12 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Button(
-                    onClick = { loadHistoryFromFirebase() },
+                    onClick = { prepareYesterdayRecordAutomatically() },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("グラフを更新")
+                    Text("端末から再取得してグラフ更新")
                 }
             }
         }
@@ -939,7 +960,7 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "アプリを起動すると、前日分が未保存の場合は自動で保存されます",
+                        text = "家族ルームに参加すると履歴が保存されます",
                         color = textDark
                     )
                 } else {
@@ -1027,7 +1048,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun FamilyScreen() {
         Text(
-            text = "コミュニティ",
+            text = "家族コミュニティ",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = purple
@@ -1035,82 +1056,75 @@ class MainActivity : ComponentActivity() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Card(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = cardWhite)
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
+            Button(
+                onClick = {
+                    isParentMode = true
+                    memberRole = "保護者"
+                    message = "親画面にしました"
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = pink),
+                shape = RoundedCornerShape(18.dp)
             ) {
-                OutlinedTextField(
-                    value = familyNameInput,
-                    onValueChange = { familyNameInput = it },
-                    label = { Text("家族の名前") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Text("親画面")
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = familyScreenTimeInput,
-                    onValueChange = { familyScreenTimeInput = it },
-                    label = { Text("前日の使用時間（分）") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = familyTargetTimeInput,
-                    onValueChange = { familyTargetTimeInput = it },
-                    label = { Text("目標時間（分）") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = familyMaterialInput,
-                    onValueChange = { familyMaterialInput = it },
-                    label = { Text("素材数") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = { addFamilyMember() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = purple),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text("家族を追加")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = { addMyDataToFamily() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = green),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text("自分の前日データを追加")
-                }
+            Button(
+                onClick = {
+                    isParentMode = false
+                    memberRole = "子供"
+                    message = "子供画面にしました"
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = purple),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text("子供画面")
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        if (familyMembers.isEmpty()) {
-            Text("まだ家族は登録されていません", color = textDark)
+        if (isParentMode) {
+            ParentRoomCard()
         } else {
-            familyMembers.forEachIndexed { index, member ->
-                val achievementRate = if (member.targetTime > 0) {
-                    ((member.targetTime - member.screenTime) * 100 / member.targetTime)
+            ChildJoinRoomCard()
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CurrentRoomCard()
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "ルームメンバー",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = textDark
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (roomMembers.isEmpty()) {
+            Text(
+                text = "まだこのルームに家族がいません",
+                color = textDark
+            )
+        } else {
+            roomMembers.forEachIndexed { index, member ->
+                val achievementText = if (member.screenTimeMinutes <= member.targetMinutes) {
+                    "目標達成"
                 } else {
-                    0
+                    "目標超過"
+                }
+
+                val achievementColor = if (member.screenTimeMinutes <= member.targetMinutes) {
+                    green
+                } else {
+                    pink
                 }
 
                 Card(
@@ -1125,8 +1139,8 @@ class MainActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (index % 2 == 0) "👧" else "👦",
-                            fontSize = 36.sp
+                            text = if (member.role == "保護者") "👨‍👩‍👧" else if (index % 2 == 0) "👧" else "👦",
+                            fontSize = 38.sp
                         )
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1135,29 +1149,47 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = member.name,
+                                text = member.memberName,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textDark
                             )
 
                             Text(
-                                text = "前日の使用時間　${member.screenTime}分",
+                                text = "メンバーID：${member.memberId}",
                                 color = textDark
                             )
 
                             Text(
-                                text = "達成率　${achievementRate}%",
-                                color = purple
+                                text = "区分：${member.role}",
+                                color = textDark
                             )
-                        }
 
-                        Button(
-                            onClick = { removeFamilyMember(index) },
-                            colors = ButtonDefaults.buttonColors(containerColor = pink),
-                            shape = RoundedCornerShape(18.dp)
-                        ) {
-                            Text("削除")
+                            Text(
+                                text = "前日の使用時間：${member.screenTimeMinutes}分",
+                                color = textDark
+                            )
+
+                            Text(
+                                text = "目標：${member.targetMinutes}分",
+                                color = textDark
+                            )
+
+                            Text(
+                                text = "素材：${member.materialCount}個",
+                                color = textDark
+                            )
+
+                            Text(
+                                text = "更新日：${member.lastUpdatedDate}",
+                                color = textDark
+                            )
+
+                            Text(
+                                text = achievementText,
+                                fontWeight = FontWeight.Bold,
+                                color = achievementColor
+                            )
                         }
                     }
                 }
@@ -1169,9 +1201,332 @@ class MainActivity : ComponentActivity() {
         Text(text = message, color = textDark)
     }
 
+    @Composable
+    private fun ParentRoomCard() {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = lightPink)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "親：家族ルームを作成",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = pink
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "親がルームIDと招待コードを発行します。子供はこの2つを入力しないと参加できません。",
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = roomIdInput,
+                    onValueChange = { roomIdInput = it },
+                    label = { Text("作成する家族ルームID") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = inviteCodeInput,
+                    onValueChange = { inviteCodeInput = it },
+                    label = { Text("招待コード（空なら自動発行）") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = memberIdInput,
+                    onValueChange = { memberIdInput = it },
+                    label = { Text("親のメンバーID") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = memberNameInput,
+                    onValueChange = { memberNameInput = it },
+                    label = { Text("親の名前") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = { createFamilyRoom() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = pink),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Text("家族ルームを作成する")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ChildJoinRoomCard() {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = cardWhite)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "子供：家族ルームに参加",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = purple
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "親から教えてもらったルームIDと招待コードを入力してください。",
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = roomIdInput,
+                    onValueChange = { roomIdInput = it },
+                    label = { Text("家族ルームID") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = inviteCodeInput,
+                    onValueChange = { inviteCodeInput = it },
+                    label = { Text("招待コード") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = memberIdInput,
+                    onValueChange = { memberIdInput = it },
+                    label = { Text("自分のメンバーID") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = memberNameInput,
+                    onValueChange = { memberNameInput = it },
+                    label = { Text("自分の名前") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = { joinFamilyRoom() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = purple),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Text("家族ルームに参加する")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun CurrentRoomCard() {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = lightOrange)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
+            ) {
+                Text(
+                    text = "現在のコミュニティ設定",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = orange
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = if (isInFamilyRoom) {
+                        "参加中"
+                    } else {
+                        "未参加"
+                    },
+                    color = textDark
+                )
+
+                Text(
+                    text = "ルームID：${getRoomId()}",
+                    color = textDark
+                )
+
+                Text(
+                    text = "メンバーID：${getMemberId()}",
+                    color = textDark
+                )
+
+                Text(
+                    text = "名前：${getMemberName()}",
+                    color = textDark
+                )
+
+                Text(
+                    text = "区分：${getRoleName()}",
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { loadRoomMembers() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = green),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Text("ルームメンバーを更新")
+                }
+            }
+        }
+    }
+
     private fun openUsageAccessSettings() {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         startActivity(intent)
+    }
+
+    private fun createFamilyRoom() {
+        val roomId = getRoomId()
+        val memberId = getMemberId()
+        val memberName = getMemberName()
+
+        if (roomId.isBlank()) {
+            message = "家族ルームIDを入力してください"
+            return
+        }
+
+        if (memberId.isBlank()) {
+            message = "親のメンバーIDを入力してください"
+            return
+        }
+
+        var code = inviteCodeInput.trim()
+
+        if (code.isBlank()) {
+            code = generateInviteCode()
+            inviteCodeInput = code
+        }
+
+        isParentMode = true
+        memberRole = "保護者"
+        isInFamilyRoom = true
+        saveCommunitySettings()
+
+        val roomData = hashMapOf(
+            "roomId" to roomId,
+            "inviteCode" to code,
+            "createdByMemberId" to memberId,
+            "createdByName" to memberName,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
+        db.collection("familyRooms")
+            .document(roomId)
+            .set(roomData)
+            .addOnSuccessListener {
+                if (hasUsageStatsPermission()) {
+                    val minutes = getYesterdayScreenTimeMinutes()
+                    screenTimeMinutes = minutes
+                    materialCount = calculateMaterial(minutes)
+                }
+
+                saveCurrentStateToFirebase(
+                    showMessage = true,
+                    successMessage = "家族ルームを作成しました。招待コードは ${code} です"
+                )
+            }
+            .addOnFailureListener {
+                message = "家族ルームの作成に失敗しました"
+            }
+    }
+
+    private fun joinFamilyRoom() {
+        val roomId = getRoomId()
+        val memberId = getMemberId()
+        val code = inviteCodeInput.trim()
+
+        if (roomId.isBlank()) {
+            message = "家族ルームIDを入力してください"
+            return
+        }
+
+        if (code.isBlank()) {
+            message = "招待コードを入力してください"
+            return
+        }
+
+        if (memberId.isBlank()) {
+            message = "メンバーIDを入力してください"
+            return
+        }
+
+        db.collection("familyRooms")
+            .document(roomId)
+            .get()
+            .addOnSuccessListener { document ->
+                if (!document.exists()) {
+                    message = "その家族ルームは存在しません"
+                    return@addOnSuccessListener
+                }
+
+                val correctCode = document.getString("inviteCode") ?: ""
+
+                if (correctCode != code) {
+                    message = "招待コードが違うため参加できません"
+                    return@addOnSuccessListener
+                }
+
+                isParentMode = false
+                memberRole = "子供"
+                isInFamilyRoom = true
+                saveCommunitySettings()
+
+                if (hasUsageStatsPermission()) {
+                    val minutes = getYesterdayScreenTimeMinutes()
+                    screenTimeMinutes = minutes
+                    materialCount = calculateMaterial(minutes)
+                }
+
+                saveCurrentStateToFirebase(
+                    showMessage = true,
+                    successMessage = "${getMemberName()}が家族ルームに参加しました"
+                )
+            }
+            .addOnFailureListener {
+                message = "家族ルームの確認に失敗しました"
+            }
     }
 
     private fun prepareYesterdayRecordAutomatically() {
@@ -1180,36 +1535,21 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val date = getYesterdayDateString()
+        val minutes = getYesterdayScreenTimeMinutes()
 
-        db.collection("families")
-            .document("demoFamily")
-            .collection("children")
-            .document("testChild")
-            .collection("dailyRecords")
-            .document(date)
-            .get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    loadRecordIntoState(document)
-                    message = "前日分は自動保存済みです"
-                    loadHistoryFromFirebase(false)
-                } else {
-                    val minutes = getYesterdayScreenTimeMinutes()
-                    val material = calculateMaterial(minutes)
+        screenTimeMinutes = minutes
+        materialCount = calculateMaterial(minutes)
 
-                    screenTimeMinutes = minutes
-                    materialCount = material
+        if (!isInFamilyRoom) {
+            historyRecords.clear()
+            message = "端末から前日の使用時間を再取得しました：${minutes}分"
+            return
+        }
 
-                    saveCurrentStateToFirebase(
-                        showMessage = true,
-                        successMessage = "日付が変わったため、前日分を自動保存しました"
-                    )
-                }
-            }
-            .addOnFailureListener {
-                message = "前日分の自動確認に失敗しました"
-            }
+        saveCurrentStateToFirebase(
+            showMessage = true,
+            successMessage = "端末から前日の使用時間を再取得して保存しました：${minutes}分"
+        )
     }
 
     private fun updateTargetTime() {
@@ -1228,10 +1568,14 @@ class MainActivity : ComponentActivity() {
             materialCount = calculateMaterial(minutes)
         }
 
-        saveCurrentStateToFirebase(
-            showMessage = true,
-            successMessage = "目標時間を${targetMinutes}分に変更しました"
-        )
+        if (isInFamilyRoom) {
+            saveCurrentStateToFirebase(
+                showMessage = true,
+                successMessage = "目標時間を${targetMinutes}分に変更しました"
+            )
+        } else {
+            message = "目標時間を${targetMinutes}分に変更しました"
+        }
     }
 
     private fun calculateMaterial(minutes: Long): Long {
@@ -1250,15 +1594,6 @@ class MainActivity : ComponentActivity() {
             materialCount >= 5 -> "🐼"
             materialCount >= 1 -> "🐼💧"
             else -> "🐼💤"
-        }
-    }
-
-    private fun getAnimalState(): String {
-        return when {
-            materialCount >= 10 -> "元気いっぱい"
-            materialCount >= 5 -> "元気"
-            materialCount >= 1 -> "少し疲れている"
-            else -> "しょんぼり"
         }
     }
 
@@ -1324,22 +1659,14 @@ class MainActivity : ComponentActivity() {
 
     private fun requestApproval(index: Int) {
         val ticket = tickets[index]
-
-        tickets[index] = ticket.copy(
-            status = "承認待ち"
-        )
-
+        tickets[index] = ticket.copy(status = "承認待ち")
         message = "${ticket.name}を親に承認申請しました"
         autoSaveCurrentStateSilently()
     }
 
     private fun approveTicket(index: Int) {
         val ticket = tickets[index]
-
-        tickets[index] = ticket.copy(
-            status = "承認済み"
-        )
-
+        tickets[index] = ticket.copy(status = "承認済み")
         message = "${ticket.name}が承認されました"
         autoSaveCurrentStateSilently()
     }
@@ -1352,10 +1679,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        tickets[index] = ticket.copy(
-            status = "使用済み"
-        )
-
+        tickets[index] = ticket.copy(status = "使用済み")
         message = "${ticket.name}を使用済みにしました"
         autoSaveCurrentStateSilently()
     }
@@ -1378,10 +1702,7 @@ class MainActivity : ComponentActivity() {
 
     private fun toggleTask(index: Int) {
         val task = tasks[index]
-
-        tasks[index] = task.copy(
-            completed = !task.completed
-        )
+        tasks[index] = task.copy(completed = !task.completed)
 
         message = if (!task.completed) {
             "${task.title}を完了しました"
@@ -1392,72 +1713,11 @@ class MainActivity : ComponentActivity() {
         autoSaveCurrentStateSilently()
     }
 
-    private fun addFamilyMember() {
-        val name = familyNameInput
-        val screenTime = familyScreenTimeInput.toLongOrNull()
-        val targetTime = familyTargetTimeInput.toLongOrNull()
-        val material = familyMaterialInput.toLongOrNull()
-
-        if (name.isBlank()) {
-            message = "家族の名前を入力してください"
-            return
-        }
-
-        if (screenTime == null || screenTime < 0) {
-            message = "使用時間を正しく入力してください"
-            return
-        }
-
-        if (targetTime == null || targetTime <= 0) {
-            message = "目標時間を正しく入力してください"
-            return
-        }
-
-        if (material == null || material < 0) {
-            message = "素材数を正しく入力してください"
-            return
-        }
-
-        familyMembers.add(
-            FamilyMember(
-                name = name,
-                screenTime = screenTime,
-                targetTime = targetTime,
-                material = material
-            )
-        )
-
-        familyNameInput = ""
-        familyScreenTimeInput = ""
-        familyTargetTimeInput = ""
-        familyMaterialInput = ""
-
-        message = "${name}を家族に追加しました"
-        autoSaveCurrentStateSilently()
-    }
-
-    private fun addMyDataToFamily() {
-        familyMembers.add(
-            FamilyMember(
-                name = "自分",
-                screenTime = screenTimeMinutes,
-                targetTime = targetMinutes,
-                material = materialCount
-            )
-        )
-
-        message = "自分の前日データを家族に追加しました"
-        autoSaveCurrentStateSilently()
-    }
-
-    private fun removeFamilyMember(index: Int) {
-        val name = familyMembers[index].name
-        familyMembers.removeAt(index)
-        message = "${name}を削除しました"
-        autoSaveCurrentStateSilently()
-    }
-
     private fun autoSaveCurrentStateSilently() {
+        if (!isInFamilyRoom) {
+            return
+        }
+
         saveCurrentStateToFirebase(
             showMessage = false,
             successMessage = ""
@@ -1468,6 +1728,13 @@ class MainActivity : ComponentActivity() {
         showMessage: Boolean,
         successMessage: String
     ) {
+        if (!isInFamilyRoom) {
+            if (showMessage) {
+                message = "家族ルームに参加していないため保存できません"
+            }
+            return
+        }
+
         val date = getYesterdayDateString()
 
         val ticketList = tickets.map {
@@ -1491,44 +1758,62 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        val familyList = familyMembers.map {
-            mapOf(
-                "name" to it.name,
-                "screenTime" to it.screenTime,
-                "targetTime" to it.targetTime,
-                "material" to it.material
-            )
-        }
+        val memberData = hashMapOf(
+            "roomId" to getRoomId(),
+            "memberId" to getMemberId(),
+            "memberName" to getMemberName(),
+            "role" to getRoleName(),
+            "screenTimeMinutes" to screenTimeMinutes,
+            "targetMinutes" to targetMinutes,
+            "materialCount" to materialCount,
+            "lastUpdatedDate" to date,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
 
-        val data = hashMapOf(
+        val dailyData = hashMapOf(
             "date" to date,
+            "roomId" to getRoomId(),
+            "memberId" to getMemberId(),
+            "memberName" to getMemberName(),
+            "role" to getRoleName(),
             "screenTimeMinutes" to screenTimeMinutes,
             "targetMinutes" to targetMinutes,
             "materialCount" to materialCount,
             "tickets" to ticketList,
             "rewardTicketTypes" to rewardList,
             "tasks" to taskList,
-            "familyMembers" to familyList,
             "updatedAt" to FieldValue.serverTimestamp()
         )
 
-        db.collection("families")
-            .document("demoFamily")
-            .collection("children")
-            .document("testChild")
-            .collection("dailyRecords")
-            .document(date)
-            .set(data)
-            .addOnSuccessListener {
-                if (showMessage) {
-                    message = successMessage
-                }
+        val memberRef = db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .document(getMemberId())
 
-                loadHistoryFromFirebase(false)
+        memberRef
+            .set(memberData)
+            .addOnSuccessListener {
+                memberRef
+                    .collection("dailyRecords")
+                    .document(date)
+                    .set(dailyData)
+                    .addOnSuccessListener {
+                        if (showMessage) {
+                            message = successMessage
+                        }
+
+                        loadHistoryFromFirebase(false)
+                        loadRoomMembers(false)
+                    }
+                    .addOnFailureListener {
+                        if (showMessage) {
+                            message = "前日データの保存に失敗しました"
+                        }
+                    }
             }
             .addOnFailureListener {
                 if (showMessage) {
-                    message = "自動保存に失敗しました"
+                    message = "ルームメンバー情報の保存に失敗しました"
                 }
             }
     }
@@ -1539,10 +1824,14 @@ class MainActivity : ComponentActivity() {
         materialCount = document.getLong("materialCount") ?: 0L
         targetInput = targetMinutes.toString()
 
+        val savedMemberName = document.getString("memberName")
+        if (!savedMemberName.isNullOrBlank()) {
+            memberNameInput = savedMemberName
+        }
+
         tickets.clear()
         rewardTicketTypes.clear()
         tasks.clear()
-        familyMembers.clear()
 
         val ticketList = document.get("tickets") as? List<*>
         ticketList?.forEach { item ->
@@ -1598,37 +1887,26 @@ class MainActivity : ComponentActivity() {
             tasks.add(DailyTask("計算ドリル（15分）", false))
             tasks.add(DailyTask("読書（15分）", false))
         }
-
-        val familyList = document.get("familyMembers") as? List<*>
-        familyList?.forEach { item ->
-            val map = item as? Map<*, *>
-            val name = map?.get("name") as? String ?: return@forEach
-            val screenTime = toLongValue(map["screenTime"])
-            val targetTime = toLongValue(map["targetTime"])
-            val material = toLongValue(map["material"])
-
-            familyMembers.add(
-                FamilyMember(
-                    name = name,
-                    screenTime = screenTime,
-                    targetTime = targetTime,
-                    material = material
-                )
-            )
-        }
     }
 
     private fun loadHistoryFromFirebase(showMessage: Boolean = true) {
         historyRecords.clear()
 
+        if (!isInFamilyRoom) {
+            if (showMessage) {
+                message = "家族ルームに参加するとグラフ履歴が表示されます"
+            }
+            return
+        }
+
         if (showMessage) {
             message = "履歴を読み込み中です"
         }
 
-        db.collection("families")
-            .document("demoFamily")
-            .collection("children")
-            .document("testChild")
+        db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .document(getMemberId())
             .collection("dailyRecords")
             .orderBy("date", Query.Direction.DESCENDING)
             .limit(7)
@@ -1672,6 +1950,83 @@ class MainActivity : ComponentActivity() {
             }
     }
 
+    private fun loadRoomMembers(showMessage: Boolean = true) {
+        roomMembers.clear()
+
+        if (!isInFamilyRoom) {
+            if (showMessage) {
+                message = "家族ルームに参加していません"
+            }
+            return
+        }
+
+        if (showMessage) {
+            message = "ルームメンバーを読み込み中です"
+        }
+
+        db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .get()
+            .addOnSuccessListener { result ->
+                if (result.isEmpty) {
+                    if (showMessage) {
+                        message = "このルームにはまだメンバーがいません"
+                    }
+                    return@addOnSuccessListener
+                }
+
+                for (document in result.documents) {
+                    val member = RoomMember(
+                        memberId = document.getString("memberId") ?: document.id,
+                        memberName = document.getString("memberName") ?: "名前なし",
+                        role = document.getString("role") ?: "メンバー",
+                        screenTimeMinutes = document.getLong("screenTimeMinutes") ?: 0L,
+                        targetMinutes = document.getLong("targetMinutes") ?: 0L,
+                        materialCount = document.getLong("materialCount") ?: 0L,
+                        lastUpdatedDate = document.getString("lastUpdatedDate") ?: "-"
+                    )
+
+                    roomMembers.add(member)
+                }
+
+                if (showMessage) {
+                    message = "ルームメンバーを読み込みました"
+                }
+            }
+            .addOnFailureListener {
+                if (showMessage) {
+                    message = "ルームメンバーの読み込みに失敗しました"
+                }
+            }
+    }
+
+    private fun saveCommunitySettings() {
+        prefs.edit()
+            .putString("roomId", roomIdInput)
+            .putString("inviteCode", inviteCodeInput)
+            .putString("memberId", memberIdInput)
+            .putString("memberName", memberNameInput)
+            .putString("memberRole", memberRole)
+            .putBoolean("isInFamilyRoom", isInFamilyRoom)
+            .apply()
+    }
+
+    private fun loadCommunitySettings() {
+        roomIdInput = prefs.getString("roomId", "room001") ?: "room001"
+        inviteCodeInput = prefs.getString("inviteCode", "") ?: ""
+        memberIdInput = prefs.getString("memberId", "member001") ?: "member001"
+        memberNameInput = prefs.getString("memberName", "たろう") ?: "たろう"
+        memberRole = prefs.getString("memberRole", "子供") ?: "子供"
+        isInFamilyRoom = prefs.getBoolean("isInFamilyRoom", false)
+        isParentMode = memberRole == "保護者"
+    }
+
+    private fun generateInviteCode(): String {
+        val number = (System.currentTimeMillis() % 9000L) + 1000L
+        return number.toString()
+    }
+
     private fun toLongValue(value: Any?): Long {
         return when (value) {
             is Long -> value
@@ -1699,19 +2054,71 @@ class MainActivity : ComponentActivity() {
 
         val startTime = calendar.timeInMillis
 
-        val usageStatsList = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            startTime,
-            endTime
-        )
+        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+        val event = android.app.usage.UsageEvents.Event()
 
+        var currentPackageName: String? = null
+        var currentStartTime = 0L
         var totalTime = 0L
 
-        for (usageStats in usageStatsList) {
-            totalTime += usageStats.totalTimeInForeground
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+
+            val packageName = event.packageName ?: continue
+
+            if (shouldIgnorePackage(packageName)) {
+                continue
+            }
+
+            when (event.eventType) {
+                android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND,
+                android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    currentPackageName = packageName
+                    currentStartTime = event.timeStamp
+                }
+
+                android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND,
+                android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED,
+                android.app.usage.UsageEvents.Event.ACTIVITY_STOPPED -> {
+                    if (currentPackageName == packageName && currentStartTime > 0L) {
+                        if (event.timeStamp > currentStartTime) {
+                            totalTime += event.timeStamp - currentStartTime
+                        }
+
+                        currentPackageName = null
+                        currentStartTime = 0L
+                    }
+                }
+            }
+        }
+
+        if (currentPackageName != null && currentStartTime > 0L && endTime > currentStartTime) {
+            totalTime += endTime - currentStartTime
         }
 
         return totalTime / 1000 / 60
+    }
+
+    private fun shouldIgnorePackage(packageName: String): Boolean {
+        if (packageName == this.packageName) {
+            return true
+        }
+
+        val ignorePackages = listOf(
+            "com.android.systemui",
+            "com.google.android.apps.nexuslauncher",
+            "com.sec.android.app.launcher",
+            "com.miui.home",
+            "com.oppo.launcher",
+            "com.coloros.launcher",
+            "com.android.launcher",
+            "com.google.android.permissioncontroller",
+            "com.android.permissioncontroller",
+            "com.android.settings",
+            "com.google.android.apps.wellbeing"
+        )
+
+        return ignorePackages.contains(packageName)
     }
 
     private fun getYesterdayDateString(): String {
@@ -1720,6 +2127,24 @@ class MainActivity : ComponentActivity() {
 
         return SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
             .format(calendar.time)
+    }
+
+    private fun getRoomId(): String {
+        return roomIdInput.trim()
+    }
+
+    private fun getMemberId(): String {
+        return memberIdInput.trim()
+    }
+
+    private fun getMemberName(): String {
+        return memberNameInput.ifBlank {
+            "名前なし"
+        }
+    }
+
+    private fun getRoleName(): String {
+        return memberRole
     }
 
     private fun hasUsageStatsPermission(): Boolean {
