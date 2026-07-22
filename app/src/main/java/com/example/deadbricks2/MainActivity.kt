@@ -1,6 +1,7 @@
 package com.example.deadbricks2
 
 import android.app.AppOpsManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -89,11 +90,16 @@ class MainActivity : ComponentActivity() {
     private val db = FirebaseFirestore.getInstance()
     private lateinit var prefs: SharedPreferences
 
+    private var hasSelectedRole by mutableStateOf(false)
     private var currentScreen by mutableStateOf("home")
 
     private var screenTimeMinutes by mutableLongStateOf(0L)
     private var materialCount by mutableLongStateOf(0L)
-    private var message by mutableStateOf("前日の使用時間を自動確認します")
+    private var message by mutableStateOf("がめんをえらんでください")
+
+    private var lastSavedDate by mutableStateOf("")
+    private var lastSavedScreenTimeMinutes by mutableLongStateOf(0L)
+    private var lastSavedMaterialCount by mutableLongStateOf(0L)
 
     private var targetMinutes by mutableLongStateOf(60L)
     private var targetInput by mutableStateOf("60")
@@ -107,23 +113,22 @@ class MainActivity : ComponentActivity() {
     private var isInFamilyRoom by mutableStateOf(false)
 
     private var taskInput by mutableStateOf("")
-
     private var rewardNameInput by mutableStateOf("")
     private var rewardCostInput by mutableStateOf("")
 
     private val tickets = mutableStateListOf<Ticket>()
 
     private val rewardTicketTypes = mutableStateListOf(
-        RewardTicketType("おやつ豪華になる券", 5),
-        RewardTicketType("お小遣い10円券", 10),
-        RewardTicketType("背景変更券", 8)
+        RewardTicketType("おやつがふえるチケット", 5),
+        RewardTicketType("おこづかい10えんチケット", 10),
+        RewardTicketType("きせかえチケット", 8)
     )
 
     private val tasks = mutableStateListOf(
-        DailyTask("宿題をやる", false),
-        DailyTask("漢字ドリル（10分）", false),
-        DailyTask("計算ドリル（15分）", false),
-        DailyTask("読書（15分）", false)
+        DailyTask("しゅくだいをする", false),
+        DailyTask("かんじドリルをする", false),
+        DailyTask("けいさんドリルをする", false),
+        DailyTask("ほんをよむ", false)
     )
 
     private val historyRecords = mutableStateListOf<DailyRecord>()
@@ -131,10 +136,10 @@ class MainActivity : ComponentActivity() {
 
     private val materialRate = 10L
 
-    private val backgroundColor = Color(0xFFF7F4FF)
-    private val purple = Color(0xFF8B6BE8)
+    private val backgroundColor = Color(0xFFF2F8E8)
+    private val purple = Color(0xFF6D4FD8)
     private val lightPurple = Color(0xFFECE5FF)
-    private val green = Color(0xFF6DC56D)
+    private val green = Color(0xFF75B843)
     private val lightGreen = Color(0xFFE7F7E7)
     private val orange = Color(0xFFFFB74D)
     private val lightOrange = Color(0xFFFFF3DD)
@@ -148,46 +153,216 @@ class MainActivity : ComponentActivity() {
 
         prefs = getSharedPreferences("deadbricks_settings", Context.MODE_PRIVATE)
         loadCommunitySettings()
+        loadLastAutoSavedRecordFromLocal()
+
+        DailyScreenTimeWorker.scheduleNextDailySave(this)
 
         setContent {
             MaterialTheme {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(backgroundColor)
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Header()
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        when (currentScreen) {
-                            "home" -> HomeScreen()
-                            "craft" -> CraftScreen()
-                            "task" -> TaskScreen()
-                            "graph" -> GraphScreen()
-                            "family" -> FamilyScreen()
-                        }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-                    }
-
-                    BottomMenu()
+                if (!hasSelectedRole) {
+                    RoleSelectScreen()
+                } else {
+                    MainAppScreen()
                 }
             }
         }
 
-        prepareYesterdayRecordAutomatically()
+        if (hasSelectedRole) {
+            prepareYesterdayRecordAutomatically()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        prepareYesterdayRecordAutomatically()
+
+        if (hasSelectedRole) {
+            loadLastAutoSavedRecordFromLocal()
+            DailyScreenTimeWorker.scheduleNextDailySave(this)
+            prepareYesterdayRecordAutomatically()
+        }
+    }
+
+    @Composable
+    private fun RoleSelectScreen() {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "デットブリックス",
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+                color = purple
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "つかうがめんをえらんでください",
+                fontSize = 20.sp,
+                color = textDark
+            )
+
+            Spacer(modifier = Modifier.height(30.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = lightPink),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "👨‍👩‍👧",
+                        fontSize = 64.sp
+                    )
+
+                    Text(
+                        text = "おやのがめん",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = pink
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "へやをつくったり、こどものじかんをみます",
+                        color = textDark
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = { selectParentMode() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = pink),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text("おやではじめる")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = lightPurple),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🐼",
+                        fontSize = 64.sp
+                    )
+
+                    Text(
+                        text = "こどものがめん",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = purple
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "そざいをあつめて、チケットをつくります",
+                        color = textDark
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = { selectChildMode() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = purple),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text("こどもではじめる")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun selectParentMode() {
+        hasSelectedRole = true
+        isParentMode = true
+        memberRole = "保護者"
+        message = "親画面にしました"
+        saveCommunitySettings()
+
+        if (hasUsageStatsPermission()) {
+            prepareYesterdayRecordAutomatically()
+        }
+    }
+
+    private fun selectChildMode() {
+        hasSelectedRole = true
+        isParentMode = false
+        memberRole = "子供"
+        message = "こどものがめんにしたよ"
+        saveCommunitySettings()
+
+        if (hasUsageStatsPermission()) {
+            prepareYesterdayRecordAutomatically()
+        }
+    }
+
+    private fun backToRoleSelectScreen() {
+        hasSelectedRole = false
+        currentScreen = "home"
+        message = "がめんをえらんでください"
+
+        prefs.edit()
+            .putBoolean("hasSelectedRole", false)
+            .apply()
+    }
+
+    @Composable
+    private fun MainAppScreen() {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (currentScreen != "home") {
+                    Header()
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                when (currentScreen) {
+                    "home" -> HomeScreen()
+                    "craft" -> CraftScreen()
+                    "task" -> TaskScreen()
+                    "graph" -> GraphScreen()
+                    "family" -> FamilyScreen()
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            BottomMenu()
+        }
     }
 
     @Composable
@@ -203,17 +378,16 @@ class MainActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = if (isParentMode) {
-                    "親画面"
-                } else {
-                    "子供画面"
-                },
+                text = uiText("親画面", "こどものがめん"),
                 color = textDark
             )
 
             if (isInFamilyRoom) {
                 Text(
-                    text = "参加中のルーム：${getRoomId()}",
+                    text = uiText(
+                        "参加中のルーム：${getRoomId()}",
+                        "はいっているへや：${getRoomId()}"
+                    ),
                     color = textDark
                 )
             }
@@ -235,9 +409,9 @@ class MainActivity : ComponentActivity() {
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                MenuButton("👨‍👩‍👧", "コミュニティ", "family")
-                MenuButton("🏠", "ホーム", "home")
-                MenuButton("📊", "グラフ", "graph")
+                MenuButton("👨‍👩‍👧", uiText("コミュニティ", "かぞく"), "family")
+                MenuButton("🏠", uiText("ホーム", "ホーム"), "home")
+                MenuButton("📊", uiText("グラフ", "ぐらふ"), "graph")
             }
         }
     }
@@ -251,7 +425,8 @@ class MainActivity : ComponentActivity() {
                 currentScreen = screen
 
                 if (screen == "graph") {
-                    prepareYesterdayRecordAutomatically()
+                    loadLastAutoSavedRecordFromLocal()
+                    loadHistoryFromFirebase()
                 }
 
                 if (screen == "family") {
@@ -259,8 +434,8 @@ class MainActivity : ComponentActivity() {
                 }
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (selected) purple else lightPurple,
-                contentColor = if (selected) Color.White else purple
+                containerColor = if (selected) purple else Color.White,
+                contentColor = if (selected) Color.White else textDark
             ),
             shape = RoundedCornerShape(18.dp)
         ) {
@@ -270,63 +445,99 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun HomeScreen() {
+        val savedMinutes = (targetMinutes - screenTimeMinutes).coerceAtLeast(0L)
+
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F4FF)),
+            shape = RoundedCornerShape(30.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF7FF)),
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = getAnimalFace(),
-                    fontSize = 80.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = { backToRoleSelectScreen() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = purple
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "＜",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                Text(
-                    text = "おはよう！",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textDark
-                )
+                    Text(
+                        text = uiText("ホーム", "ぱんだ"),
+                        modifier = Modifier.weight(1f),
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textDark
+                    )
 
-                Text(
-                    text = getAnimalMessage(),
-                    color = textDark
-                )
-            }
-        }
+                    Spacer(modifier = Modifier.width(52.dp))
+                }
 
-        Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = cardWhite)
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "前日の使用時間",
-                    fontSize = 16.sp,
-                    color = textDark
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp)
+                        .background(
+                            Color(0xFFEAF7FF),
+                            RoundedCornerShape(26.dp)
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(82.dp)
+                            .background(
+                                Color(0xFFCDEFA9),
+                                RoundedCornerShape(26.dp)
+                            )
+                    )
 
-                Text(
-                    text = "${screenTimeMinutes}分",
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = purple
-                )
+                    Text(
+                        text = "☁️        ☁️",
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp),
+                        fontSize = 26.sp
+                    )
 
-                Text(
-                    text = "目標 ${targetMinutes}分",
-                    color = textDark
-                )
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 28.dp, end = 10.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Text(
+                            text = "おはよう！",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            fontWeight = FontWeight.Bold,
+                            color = textDark
+                        )
+                    }
+
+                    Text(
+                        text = "🐼",
+                        modifier = Modifier.align(Alignment.Center),
+                        fontSize = 105.sp
+                    )
+                }
             }
         }
 
@@ -334,144 +545,112 @@ class MainActivity : ComponentActivity() {
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = lightOrange)
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = cardWhite),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(18.dp)
             ) {
                 Text(
-                    text = "🧱",
-                    fontSize = 34.sp
+                    text = uiText("前日の節約時間", "きのうせつやくできたじかん"),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textDark
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        text = "前日の結果でもらえる素材",
+                        text = "${savedMinutes}${uiText("分", "ふん")}",
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
                         color = textDark
                     )
 
                     Text(
-                        text = "${materialCount}個",
-                        fontSize = 28.sp,
+                        text = uiText(
+                            "目標 ${targetMinutes}分",
+                            "もくひょう ${targetMinutes}ふん"
+                        ),
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = orange
+                        color = textDark
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Text(
+                    text = uiText("獲得できる素材", "もらえるそざい"),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "🪨",
+                        fontSize = 34.sp
+                    )
+
+                    Text(
+                        text = "${materialCount}${uiText("個", "こ")}",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textDark
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "今日やること",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = textDark
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 6.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = lightGreen),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(text = "✅", fontSize = 42.sp)
-
-                    Text(
-                        text = "タスク",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = green
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { currentScreen = "task" },
-                        colors = ButtonDefaults.buttonColors(containerColor = green),
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Text("開く")
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 6.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = lightPurple),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(text = "🎫", fontSize = 42.sp)
-
-                    Text(
-                        text = "クラフト",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = purple
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { currentScreen = "craft" },
-                        colors = ButtonDefaults.buttonColors(containerColor = purple),
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Text("開く")
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Button(
-                onClick = {
-                    isParentMode = false
-                    message = "子供画面にしました"
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = purple),
+                onClick = { currentScreen = "craft" },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 6.dp)
+                    .height(58.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = orange),
                 shape = RoundedCornerShape(18.dp)
             ) {
-                Text("子供画面")
+                Text(
+                    text = uiText("🎫 クラフト", "🎫 つくる"),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Button(
-                onClick = {
-                    isParentMode = true
-                    message = "親画面にしました"
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = pink),
+                onClick = { currentScreen = "task" },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 6.dp)
+                    .height(58.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = green),
                 shape = RoundedCornerShape(18.dp)
             ) {
-                Text("親画面")
+                Text(
+                    text = uiText("✅ やること", "✅ やること"),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -524,7 +703,7 @@ class MainActivity : ComponentActivity() {
             colors = ButtonDefaults.buttonColors(containerColor = purple),
             shape = RoundedCornerShape(18.dp)
         ) {
-            Text("使用状況アクセスを許可する")
+            Text(uiText("使用状況アクセスを許可する", "スマホのじかんをみられるようにする"))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -535,7 +714,7 @@ class MainActivity : ComponentActivity() {
             colors = ButtonDefaults.buttonColors(containerColor = green),
             shape = RoundedCornerShape(18.dp)
         ) {
-            Text("前日データを再取得")
+            Text(uiText("今すぐ前日データを保存", "きのうのデータをとる"))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -546,7 +725,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun CraftScreen() {
         Text(
-            text = "クラフト",
+            text = uiText("クラフト", "チケットをつくる"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = purple
@@ -568,7 +747,10 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.width(10.dp))
 
                 Text(
-                    text = "もっている素材：${materialCount}個",
+                    text = uiText(
+                        "持っている素材：${materialCount}個",
+                        "もっているそざい：${materialCount}こ"
+                    ),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = textDark
@@ -587,7 +769,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "報酬チケット追加",
+                    text = uiText("報酬チケット追加", "チケットをふやす"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = purple
@@ -598,7 +780,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = rewardNameInput,
                     onValueChange = { rewardNameInput = it },
-                    label = { Text("チケット名") },
+                    label = { Text(uiText("チケット名", "チケットのなまえ")) },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -607,7 +789,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = rewardCostInput,
                     onValueChange = { rewardCostInput = it },
-                    label = { Text("必要素材数") },
+                    label = { Text(uiText("必要素材数", "いるそざいのかず")) },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -619,7 +801,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("報酬チケットを追加")
+                    Text(uiText("報酬チケットを追加", "チケットをふやす"))
                 }
             }
         }
@@ -627,7 +809,7 @@ class MainActivity : ComponentActivity() {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "作れるチケット",
+            text = uiText("作れるチケット", "つくれるチケット"),
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = textDark
@@ -662,7 +844,10 @@ class MainActivity : ComponentActivity() {
                             )
 
                             Text(
-                                text = "必要素材：${reward.cost}個",
+                                text = uiText(
+                                    "必要素材：${reward.cost}個",
+                                    "いるそざい：${reward.cost}こ"
+                                ),
                                 color = textDark
                             )
                         }
@@ -676,7 +861,7 @@ class MainActivity : ComponentActivity() {
                         colors = ButtonDefaults.buttonColors(containerColor = orange),
                         shape = RoundedCornerShape(18.dp)
                     ) {
-                        Text("クラフトする")
+                        Text(uiText("クラフトする", "つくる"))
                     }
 
                     if (isParentMode) {
@@ -698,7 +883,7 @@ class MainActivity : ComponentActivity() {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "所持チケット",
+            text = uiText("所持チケット", "もっているチケット"),
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = textDark
@@ -707,7 +892,7 @@ class MainActivity : ComponentActivity() {
         Spacer(modifier = Modifier.height(8.dp))
 
         if (tickets.isEmpty()) {
-            Text("まだチケットはありません", color = textDark)
+            Text(uiText("まだチケットはありません", "まだチケットはないよ"), color = textDark)
         } else {
             tickets.forEachIndexed { index, ticket ->
                 TicketCard(index, ticket)
@@ -739,7 +924,10 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "状態：${ticket.status}",
+                    text = uiText(
+                        "状態：${ticket.status}",
+                        "いま：${displayTicketStatus(ticket.status)}"
+                    ),
                     color = purple
                 )
 
@@ -751,7 +939,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("親に承認申請する")
+                    Text(uiText("親に承認申請する", "おうちのひとにおねがいする"))
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -762,7 +950,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = green),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("親が承認する")
+                    Text(uiText("親が承認する", "OKする"))
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -773,7 +961,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = orange),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("チケットを使う")
+                    Text(uiText("チケットを使う", "チケットをつかう"))
                 }
             }
         }
@@ -782,7 +970,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun TaskScreen() {
         Text(
-            text = "やること",
+            text = uiText("やること", "やること"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = purple
@@ -801,7 +989,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = taskInput,
                     onValueChange = { taskInput = it },
-                    label = { Text("追加するタスク") },
+                    label = { Text(uiText("追加するタスク", "ふやすやること")) },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -813,7 +1001,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("＋ やることを追加")
+                    Text(uiText("＋ やることを追加", "＋ やることをふやす"))
                 }
             }
         }
@@ -852,7 +1040,11 @@ class MainActivity : ComponentActivity() {
                         )
 
                         Text(
-                            text = if (task.completed) "完了" else "未完了",
+                            text = if (task.completed) {
+                                uiText("完了", "できた")
+                            } else {
+                                uiText("未完了", "まだ")
+                            },
                             color = if (task.completed) green else textDark
                         )
                     }
@@ -868,7 +1060,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun GraphScreen() {
         Text(
-            text = "ぼくのグラフ",
+            text = uiText("ぼくのグラフ", "ぼくのぐらふ"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = purple
@@ -885,7 +1077,10 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "端末から前日データを再取得して表示します",
+                    text = uiText(
+                        "自動保存された前日データを表示します",
+                        "きのうのデータをみます"
+                    ),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = textDark
@@ -894,24 +1089,52 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "前日の使用時間：${screenTimeMinutes}分",
+                    text = uiText(
+                        "前日の使用時間：${screenTimeMinutes}分",
+                        "きのうのじかん：${screenTimeMinutes}ふん"
+                    ),
                     color = textDark
                 )
 
                 Text(
-                    text = "素材：${materialCount}個",
+                    text = uiText("素材：${materialCount}個", "そざい：${materialCount}こ"),
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = if (lastSavedDate.isBlank()) {
+                        uiText("最終自動保存日：未保存", "まだデータはないよ")
+                    } else {
+                        uiText("最終自動保存日：${lastSavedDate}", "さいごにとったひ：${lastSavedDate}")
+                    },
                     color = textDark
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Button(
-                    onClick = { prepareYesterdayRecordAutomatically() },
+                    onClick = {
+                        loadLastAutoSavedRecordFromLocal()
+                        loadHistoryFromFirebase()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("端末から再取得してグラフ更新")
+                    Text(uiText("グラフを更新", "ぐらふをこうしん"))
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { prepareYesterdayRecordAutomatically() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = green),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Text(uiText("今すぐ前日データを保存", "いまデータをとる"))
                 }
             }
         }
@@ -928,7 +1151,7 @@ class MainActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "保存済みデータの平均",
+                    text = uiText("保存済みデータの平均", "へいきん"),
                     color = textDark
                 )
 
@@ -940,9 +1163,9 @@ class MainActivity : ComponentActivity() {
 
                 Text(
                     text = if (historyRecords.isEmpty()) {
-                        "--分"
+                        "--${uiText("分", "ふん")}"
                     } else {
-                        "${average}分"
+                        "${average}${uiText("分", "ふん")}"
                     },
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
@@ -953,14 +1176,17 @@ class MainActivity : ComponentActivity() {
 
                 if (historyRecords.isEmpty()) {
                     Text(
-                        text = "まだ自動保存された履歴がありません",
+                        text = uiText("まだ保存された履歴がありません", "まだデータはないよ"),
                         color = textDark
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "家族ルームに参加すると履歴が保存されます",
+                        text = uiText(
+                            "家族ルームに参加すると、日付変更後に前日データが自動保存されます",
+                            "かぞくのへやにはいると、データがのこるよ"
+                        ),
                         color = textDark
                     )
                 } else {
@@ -986,7 +1212,7 @@ class MainActivity : ComponentActivity() {
                                     .coerceAtLeast(8)
 
                                 Text(
-                                    text = "${record.screenTimeMinutes}分",
+                                    text = "${record.screenTimeMinutes}${uiText("分", "ふん")}",
                                     fontSize = 11.sp,
                                     color = textDark
                                 )
@@ -1031,10 +1257,28 @@ class MainActivity : ComponentActivity() {
                     Column(
                         modifier = Modifier.padding(12.dp)
                     ) {
-                        Text("日付：${record.date}", color = textDark)
-                        Text("使用時間：${record.screenTimeMinutes}分", color = textDark)
-                        Text("目標時間：${record.targetMinutes}分", color = textDark)
-                        Text("素材：${record.materialCount}個", color = textDark)
+                        Text(
+                            uiText("日付：${record.date}", "ひづけ：${record.date}"),
+                            color = textDark
+                        )
+                        Text(
+                            uiText(
+                                "使用時間：${record.screenTimeMinutes}分",
+                                "つかったじかん：${record.screenTimeMinutes}ふん"
+                            ),
+                            color = textDark
+                        )
+                        Text(
+                            uiText(
+                                "目標時間：${record.targetMinutes}分",
+                                "もくひょう：${record.targetMinutes}ふん"
+                            ),
+                            color = textDark
+                        )
+                        Text(
+                            uiText("素材：${record.materialCount}個", "そざい：${record.materialCount}こ"),
+                            color = textDark
+                        )
                     }
                 }
             }
@@ -1048,42 +1292,11 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun FamilyScreen() {
         Text(
-            text = "家族コミュニティ",
+            text = uiText("家族コミュニティ", "かぞくのへや"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = purple
         )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = {
-                    isParentMode = true
-                    memberRole = "保護者"
-                    message = "親画面にしました"
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = pink),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Text("親画面")
-            }
-
-            Button(
-                onClick = {
-                    isParentMode = false
-                    memberRole = "子供"
-                    message = "子供画面にしました"
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = purple),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Text("子供画面")
-            }
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -1100,7 +1313,7 @@ class MainActivity : ComponentActivity() {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "ルームメンバー",
+            text = uiText("ルームメンバー", "へやのひと"),
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = textDark
@@ -1110,15 +1323,15 @@ class MainActivity : ComponentActivity() {
 
         if (roomMembers.isEmpty()) {
             Text(
-                text = "まだこのルームに家族がいません",
+                text = uiText("まだこのルームに家族がいません", "まだだれもいないよ"),
                 color = textDark
             )
         } else {
             roomMembers.forEachIndexed { index, member ->
                 val achievementText = if (member.screenTimeMinutes <= member.targetMinutes) {
-                    "目標達成"
+                    uiText("目標達成", "できた")
                 } else {
-                    "目標超過"
+                    uiText("目標超過", "こえた")
                 }
 
                 val achievementColor = if (member.screenTimeMinutes <= member.targetMinutes) {
@@ -1156,32 +1369,50 @@ class MainActivity : ComponentActivity() {
                             )
 
                             Text(
-                                text = "メンバーID：${member.memberId}",
+                                text = uiText(
+                                    "メンバーID：${member.memberId}",
+                                    "ばんごう：${member.memberId}"
+                                ),
                                 color = textDark
                             )
 
                             Text(
-                                text = "区分：${member.role}",
+                                text = uiText(
+                                    "区分：${member.role}",
+                                    "だれ：${displayRole(member.role)}"
+                                ),
                                 color = textDark
                             )
 
                             Text(
-                                text = "前日の使用時間：${member.screenTimeMinutes}分",
+                                text = uiText(
+                                    "前日の使用時間：${member.screenTimeMinutes}分",
+                                    "きのうのじかん：${member.screenTimeMinutes}ふん"
+                                ),
                                 color = textDark
                             )
 
                             Text(
-                                text = "目標：${member.targetMinutes}分",
+                                text = uiText(
+                                    "目標：${member.targetMinutes}分",
+                                    "もくひょう：${member.targetMinutes}ふん"
+                                ),
                                 color = textDark
                             )
 
                             Text(
-                                text = "素材：${member.materialCount}個",
+                                text = uiText(
+                                    "素材：${member.materialCount}個",
+                                    "そざい：${member.materialCount}こ"
+                                ),
                                 color = textDark
                             )
 
                             Text(
-                                text = "更新日：${member.lastUpdatedDate}",
+                                text = uiText(
+                                    "更新日：${member.lastUpdatedDate}",
+                                    "ひづけ：${member.lastUpdatedDate}"
+                                ),
                                 color = textDark
                             )
 
@@ -1286,7 +1517,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "子供：家族ルームに参加",
+                    text = "かぞくのへやにはいる",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = purple
@@ -1295,7 +1526,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "親から教えてもらったルームIDと招待コードを入力してください。",
+                    text = "おうちのひとからきいたIDとコードをいれてね",
                     color = textDark
                 )
 
@@ -1304,7 +1535,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = roomIdInput,
                     onValueChange = { roomIdInput = it },
-                    label = { Text("家族ルームID") },
+                    label = { Text("へやのID") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1313,7 +1544,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = inviteCodeInput,
                     onValueChange = { inviteCodeInput = it },
-                    label = { Text("招待コード") },
+                    label = { Text("あいことば") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1322,7 +1553,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = memberIdInput,
                     onValueChange = { memberIdInput = it },
-                    label = { Text("自分のメンバーID") },
+                    label = { Text("じぶんのばんごう") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1331,7 +1562,7 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(
                     value = memberNameInput,
                     onValueChange = { memberNameInput = it },
-                    label = { Text("自分の名前") },
+                    label = { Text("じぶんのなまえ") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1343,7 +1574,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("家族ルームに参加する")
+                    Text("へやにはいる")
                 }
             }
         }
@@ -1360,7 +1591,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(14.dp)
             ) {
                 Text(
-                    text = "現在のコミュニティ設定",
+                    text = uiText("現在のコミュニティ設定", "いまのへや"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = orange
@@ -1370,30 +1601,30 @@ class MainActivity : ComponentActivity() {
 
                 Text(
                     text = if (isInFamilyRoom) {
-                        "参加中"
+                        uiText("参加中", "はいっている")
                     } else {
-                        "未参加"
+                        uiText("未参加", "まだはいっていない")
                     },
                     color = textDark
                 )
 
                 Text(
-                    text = "ルームID：${getRoomId()}",
+                    text = uiText("ルームID：${getRoomId()}", "へやのID：${getRoomId()}"),
                     color = textDark
                 )
 
                 Text(
-                    text = "メンバーID：${getMemberId()}",
+                    text = uiText("メンバーID：${getMemberId()}", "ばんごう：${getMemberId()}"),
                     color = textDark
                 )
 
                 Text(
-                    text = "名前：${getMemberName()}",
+                    text = uiText("名前：${getMemberName()}", "なまえ：${getMemberName()}"),
                     color = textDark
                 )
 
                 Text(
-                    text = "区分：${getRoleName()}",
+                    text = uiText("区分：${getRoleName()}", "だれ：${displayRole(getRoleName())}"),
                     color = textDark
                 )
 
@@ -1405,7 +1636,7 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = green),
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("ルームメンバーを更新")
+                    Text(uiText("ルームメンバーを更新", "へやのひとをみる"))
                 }
             }
         }
@@ -1422,12 +1653,12 @@ class MainActivity : ComponentActivity() {
         val memberName = getMemberName()
 
         if (roomId.isBlank()) {
-            message = "家族ルームIDを入力してください"
+            setMessage("家族ルームIDを入力してください", "へやのIDをいれてね")
             return
         }
 
         if (memberId.isBlank()) {
-            message = "親のメンバーIDを入力してください"
+            setMessage("親のメンバーIDを入力してください", "ばんごうをいれてね")
             return
         }
 
@@ -1438,6 +1669,7 @@ class MainActivity : ComponentActivity() {
             inviteCodeInput = code
         }
 
+        hasSelectedRole = true
         isParentMode = true
         memberRole = "保護者"
         isInFamilyRoom = true
@@ -1456,16 +1688,8 @@ class MainActivity : ComponentActivity() {
             .document(roomId)
             .set(roomData)
             .addOnSuccessListener {
-                if (hasUsageStatsPermission()) {
-                    val minutes = getYesterdayScreenTimeMinutes()
-                    screenTimeMinutes = minutes
-                    materialCount = calculateMaterial(minutes)
-                }
-
-                saveCurrentStateToFirebase(
-                    showMessage = true,
-                    successMessage = "家族ルームを作成しました。招待コードは ${code} です"
-                )
+                prepareYesterdayRecordAutomatically()
+                message = "家族ルームを作成しました。招待コードは ${code} です"
             }
             .addOnFailureListener {
                 message = "家族ルームの作成に失敗しました"
@@ -1478,17 +1702,17 @@ class MainActivity : ComponentActivity() {
         val code = inviteCodeInput.trim()
 
         if (roomId.isBlank()) {
-            message = "家族ルームIDを入力してください"
+            setMessage("家族ルームIDを入力してください", "へやのIDをいれてね")
             return
         }
 
         if (code.isBlank()) {
-            message = "招待コードを入力してください"
+            setMessage("招待コードを入力してください", "あいことばをいれてね")
             return
         }
 
         if (memberId.isBlank()) {
-            message = "メンバーIDを入力してください"
+            setMessage("メンバーIDを入力してください", "ばんごうをいれてね")
             return
         }
 
@@ -1497,41 +1721,34 @@ class MainActivity : ComponentActivity() {
             .get()
             .addOnSuccessListener { document ->
                 if (!document.exists()) {
-                    message = "その家族ルームは存在しません"
+                    setMessage("その家族ルームは存在しません", "そのへやはないよ")
                     return@addOnSuccessListener
                 }
 
                 val correctCode = document.getString("inviteCode") ?: ""
 
                 if (correctCode != code) {
-                    message = "招待コードが違うため参加できません"
+                    setMessage("招待コードが違うため参加できません", "あいことばがちがうよ")
                     return@addOnSuccessListener
                 }
 
+                hasSelectedRole = true
                 isParentMode = false
                 memberRole = "子供"
                 isInFamilyRoom = true
                 saveCommunitySettings()
 
-                if (hasUsageStatsPermission()) {
-                    val minutes = getYesterdayScreenTimeMinutes()
-                    screenTimeMinutes = minutes
-                    materialCount = calculateMaterial(minutes)
-                }
-
-                saveCurrentStateToFirebase(
-                    showMessage = true,
-                    successMessage = "${getMemberName()}が家族ルームに参加しました"
-                )
+                prepareYesterdayRecordAutomatically()
+                setMessage("${getMemberName()}が家族ルームに参加しました", "${getMemberName()}がへやにはいったよ")
             }
             .addOnFailureListener {
-                message = "家族ルームの確認に失敗しました"
+                setMessage("家族ルームの確認に失敗しました", "へやをみつけられなかったよ")
             }
     }
 
     private fun prepareYesterdayRecordAutomatically() {
         if (!hasUsageStatsPermission()) {
-            message = "使用状況アクセスを許可してください"
+            setMessage("使用状況アクセスを許可してください", "スマホのじかんをみられるようにしてね")
             return
         }
 
@@ -1540,16 +1757,44 @@ class MainActivity : ComponentActivity() {
         screenTimeMinutes = minutes
         materialCount = calculateMaterial(minutes)
 
+        saveLastRecordToLocal()
+
         if (!isInFamilyRoom) {
             historyRecords.clear()
-            message = "端末から前日の使用時間を再取得しました：${minutes}分"
+            setMessage("前日データを端末に保存しました：${minutes}分", "きのうのデータをとったよ：${minutes}ふん")
             return
         }
 
         saveCurrentStateToFirebase(
             showMessage = true,
-            successMessage = "端末から前日の使用時間を再取得して保存しました：${minutes}分"
+            successMessage = uiText("前日データを保存しました：${minutes}分", "きのうのデータをとったよ：${minutes}ふん")
         )
+    }
+
+    private fun saveLastRecordToLocal() {
+        val date = getYesterdayDateString()
+
+        lastSavedDate = date
+        lastSavedScreenTimeMinutes = screenTimeMinutes
+        lastSavedMaterialCount = materialCount
+
+        prefs.edit()
+            .putString("lastSavedDate", date)
+            .putLong("lastSavedScreenTimeMinutes", screenTimeMinutes)
+            .putLong("lastSavedMaterialCount", materialCount)
+            .putLong("targetMinutes", targetMinutes)
+            .apply()
+    }
+
+    private fun loadLastAutoSavedRecordFromLocal() {
+        lastSavedDate = prefs.getString("lastSavedDate", "") ?: ""
+        lastSavedScreenTimeMinutes = prefs.getLong("lastSavedScreenTimeMinutes", 0L)
+        lastSavedMaterialCount = prefs.getLong("lastSavedMaterialCount", 0L)
+
+        if (lastSavedDate.isNotBlank()) {
+            screenTimeMinutes = lastSavedScreenTimeMinutes
+            materialCount = lastSavedMaterialCount
+        }
     }
 
     private fun updateTargetTime() {
@@ -1562,10 +1807,15 @@ class MainActivity : ComponentActivity() {
 
         targetMinutes = newTarget
 
+        prefs.edit()
+            .putLong("targetMinutes", targetMinutes)
+            .apply()
+
         if (hasUsageStatsPermission()) {
             val minutes = getYesterdayScreenTimeMinutes()
             screenTimeMinutes = minutes
             materialCount = calculateMaterial(minutes)
+            saveLastRecordToLocal()
         }
 
         if (isInFamilyRoom) {
@@ -1584,7 +1834,7 @@ class MainActivity : ComponentActivity() {
         return if (savedMinutes > 0) {
             savedMinutes / materialRate
         } else {
-            0
+            0L
         }
     }
 
@@ -1597,26 +1847,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun getAnimalMessage(): String {
-        return when {
-            materialCount >= 10 -> "前日はたくさんスマホを我慢できたね！"
-            materialCount >= 5 -> "いい感じにがんばれています"
-            materialCount >= 1 -> "少しだけ素材をゲットできました"
-            else -> "今日は素材を集められるようにがんばろう"
-        }
-    }
-
     private fun addRewardTicketType() {
         val name = rewardNameInput
         val cost = rewardCostInput.toLongOrNull()
 
         if (name.isBlank()) {
-            message = "チケット名を入力してください"
+            setMessage("チケット名を入力してください", "チケットのなまえをいれてね")
             return
         }
 
         if (cost == null || cost <= 0) {
-            message = "必要素材数を正しく入力してください"
+            setMessage("必要素材数を正しく入力してください", "いるそざいのかずをいれてね")
             return
         }
 
@@ -1630,7 +1871,7 @@ class MainActivity : ComponentActivity() {
         rewardNameInput = ""
         rewardCostInput = ""
 
-        message = "${name}を報酬チケットに追加しました"
+        setMessage("${name}を報酬チケットに追加しました", "${name}をふやしたよ")
         autoSaveCurrentStateSilently()
     }
 
@@ -1650,24 +1891,24 @@ class MainActivity : ComponentActivity() {
                     status = "未申請"
                 )
             )
-            message = "${ticketName}をクラフトしました"
+            setMessage("${ticketName}をクラフトしました", "${ticketName}をつくったよ")
             autoSaveCurrentStateSilently()
         } else {
-            message = "素材が足りません"
+            setMessage("素材が足りません", "そざいがたりないよ")
         }
     }
 
     private fun requestApproval(index: Int) {
         val ticket = tickets[index]
         tickets[index] = ticket.copy(status = "承認待ち")
-        message = "${ticket.name}を親に承認申請しました"
+        setMessage("${ticket.name}を親に承認申請しました", "${ticket.name}をおねがいしたよ")
         autoSaveCurrentStateSilently()
     }
 
     private fun approveTicket(index: Int) {
         val ticket = tickets[index]
         tickets[index] = ticket.copy(status = "承認済み")
-        message = "${ticket.name}が承認されました"
+        setMessage("${ticket.name}が承認されました", "${ticket.name}がOKになったよ")
         autoSaveCurrentStateSilently()
     }
 
@@ -1675,12 +1916,12 @@ class MainActivity : ComponentActivity() {
         val ticket = tickets[index]
 
         if (ticket.status != "承認済み") {
-            message = "承認済みのチケットだけ使用できます"
+            setMessage("承認済みのチケットだけ使用できます", "OKされたチケットだけつかえるよ")
             return
         }
 
         tickets[index] = ticket.copy(status = "使用済み")
-        message = "${ticket.name}を使用済みにしました"
+        setMessage("${ticket.name}を使用済みにしました", "${ticket.name}をつかったよ")
         autoSaveCurrentStateSilently()
     }
 
@@ -1692,11 +1933,11 @@ class MainActivity : ComponentActivity() {
                     completed = false
                 )
             )
-            message = "タスクを追加しました"
+            setMessage("タスクを追加しました", "やることをふやしたよ")
             taskInput = ""
             autoSaveCurrentStateSilently()
         } else {
-            message = "タスク名を入力してください"
+            setMessage("タスク名を入力してください", "やることをいれてね")
         }
     }
 
@@ -1704,10 +1945,10 @@ class MainActivity : ComponentActivity() {
         val task = tasks[index]
         tasks[index] = task.copy(completed = !task.completed)
 
-        message = if (!task.completed) {
-            "${task.title}を完了しました"
+        if (!task.completed) {
+            setMessage("${task.title}を完了しました", "${task.title}ができたよ")
         } else {
-            "${task.title}を未完了に戻しました"
+            setMessage("${task.title}を未完了に戻しました", "${task.title}をまだにしたよ")
         }
 
         autoSaveCurrentStateSilently()
@@ -1730,7 +1971,7 @@ class MainActivity : ComponentActivity() {
     ) {
         if (!isInFamilyRoom) {
             if (showMessage) {
-                message = "家族ルームに参加していないため保存できません"
+                setMessage("家族ルームに参加していないためFirebaseには保存できません", "へやにはいっていないから、まだのこせないよ")
             }
             return
         }
@@ -1782,6 +2023,7 @@ class MainActivity : ComponentActivity() {
             "tickets" to ticketList,
             "rewardTicketTypes" to rewardList,
             "tasks" to taskList,
+            "savedBy" to "MainActivity",
             "updatedAt" to FieldValue.serverTimestamp()
         )
 
@@ -1807,13 +2049,13 @@ class MainActivity : ComponentActivity() {
                     }
                     .addOnFailureListener {
                         if (showMessage) {
-                            message = "前日データの保存に失敗しました"
+                            setMessage("前日データのFirebase保存に失敗しました", "データをのこせなかったよ")
                         }
                     }
             }
             .addOnFailureListener {
                 if (showMessage) {
-                    message = "ルームメンバー情報の保存に失敗しました"
+                    setMessage("ルームメンバー情報のFirebase保存に失敗しました", "へやのデータをのこせなかったよ")
                 }
             }
     }
@@ -1862,9 +2104,9 @@ class MainActivity : ComponentActivity() {
         }
 
         if (rewardTicketTypes.isEmpty()) {
-            rewardTicketTypes.add(RewardTicketType("おやつ豪華になる券", 5))
-            rewardTicketTypes.add(RewardTicketType("お小遣い10円券", 10))
-            rewardTicketTypes.add(RewardTicketType("背景変更券", 8))
+            rewardTicketTypes.add(RewardTicketType("おやつがふえるチケット", 5))
+            rewardTicketTypes.add(RewardTicketType("おこづかい10えんチケット", 10))
+            rewardTicketTypes.add(RewardTicketType("きせかえチケット", 8))
         }
 
         val taskList = document.get("tasks") as? List<*>
@@ -1882,10 +2124,10 @@ class MainActivity : ComponentActivity() {
         }
 
         if (tasks.isEmpty()) {
-            tasks.add(DailyTask("宿題をやる", false))
-            tasks.add(DailyTask("漢字ドリル（10分）", false))
-            tasks.add(DailyTask("計算ドリル（15分）", false))
-            tasks.add(DailyTask("読書（15分）", false))
+            tasks.add(DailyTask("しゅくだいをする", false))
+            tasks.add(DailyTask("かんじドリルをする", false))
+            tasks.add(DailyTask("けいさんドリルをする", false))
+            tasks.add(DailyTask("ほんをよむ", false))
         }
     }
 
@@ -1894,13 +2136,13 @@ class MainActivity : ComponentActivity() {
 
         if (!isInFamilyRoom) {
             if (showMessage) {
-                message = "家族ルームに参加するとグラフ履歴が表示されます"
+                setMessage("家族ルームに参加するとグラフ履歴が表示されます", "へやにはいると、ぐらふがみられるよ")
             }
             return
         }
 
         if (showMessage) {
-            message = "履歴を読み込み中です"
+            setMessage("履歴を読み込み中です", "データをよんでいるよ")
         }
 
         db.collection("familyRooms")
@@ -1914,7 +2156,7 @@ class MainActivity : ComponentActivity() {
             .addOnSuccessListener { result ->
                 if (result.isEmpty) {
                     if (showMessage) {
-                        message = "保存された履歴がありません"
+                        setMessage("保存された履歴がありません", "まだデータはないよ")
                     }
                     return@addOnSuccessListener
                 }
@@ -1940,12 +2182,12 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (showMessage) {
-                    message = "履歴を読み込みました"
+                    setMessage("履歴を読み込みました", "データをよんだよ")
                 }
             }
             .addOnFailureListener {
                 if (showMessage) {
-                    message = "履歴読み込みに失敗しました"
+                    setMessage("履歴読み込みに失敗しました", "データをよめなかったよ")
                 }
             }
     }
@@ -1955,13 +2197,13 @@ class MainActivity : ComponentActivity() {
 
         if (!isInFamilyRoom) {
             if (showMessage) {
-                message = "家族ルームに参加していません"
+                setMessage("家族ルームに参加していません", "まだへやにはいっていないよ")
             }
             return
         }
 
         if (showMessage) {
-            message = "ルームメンバーを読み込み中です"
+            setMessage("ルームメンバーを読み込み中です", "へやのひとをよんでいるよ")
         }
 
         db.collection("familyRooms")
@@ -1971,7 +2213,7 @@ class MainActivity : ComponentActivity() {
             .addOnSuccessListener { result ->
                 if (result.isEmpty) {
                     if (showMessage) {
-                        message = "このルームにはまだメンバーがいません"
+                        setMessage("このルームにはまだメンバーがいません", "まだだれもいないよ")
                     }
                     return@addOnSuccessListener
                 }
@@ -1991,35 +2233,47 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (showMessage) {
-                    message = "ルームメンバーを読み込みました"
+                    setMessage("ルームメンバーを読み込みました", "へやのひとをよんだよ")
                 }
             }
             .addOnFailureListener {
                 if (showMessage) {
-                    message = "ルームメンバーの読み込みに失敗しました"
+                    setMessage("ルームメンバーの読み込みに失敗しました", "へやのひとをよめなかったよ")
                 }
             }
     }
 
     private fun saveCommunitySettings() {
         prefs.edit()
+            .putBoolean("hasSelectedRole", hasSelectedRole)
             .putString("roomId", roomIdInput)
             .putString("inviteCode", inviteCodeInput)
             .putString("memberId", memberIdInput)
             .putString("memberName", memberNameInput)
             .putString("memberRole", memberRole)
             .putBoolean("isInFamilyRoom", isInFamilyRoom)
+            .putLong("targetMinutes", targetMinutes)
             .apply()
     }
 
     private fun loadCommunitySettings() {
+        hasSelectedRole = prefs.getBoolean("hasSelectedRole", false)
+
         roomIdInput = prefs.getString("roomId", "room001") ?: "room001"
         inviteCodeInput = prefs.getString("inviteCode", "") ?: ""
         memberIdInput = prefs.getString("memberId", "member001") ?: "member001"
         memberNameInput = prefs.getString("memberName", "たろう") ?: "たろう"
         memberRole = prefs.getString("memberRole", "子供") ?: "子供"
         isInFamilyRoom = prefs.getBoolean("isInFamilyRoom", false)
+
+        targetMinutes = prefs.getLong("targetMinutes", 60L)
+        targetInput = targetMinutes.toString()
+
         isParentMode = memberRole == "保護者"
+
+        if (!hasSelectedRole) {
+            message = "がめんをえらんでください"
+        }
     }
 
     private fun generateInviteCode(): String {
@@ -2055,7 +2309,7 @@ class MainActivity : ComponentActivity() {
         val startTime = calendar.timeInMillis
 
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
-        val event = android.app.usage.UsageEvents.Event()
+        val event = UsageEvents.Event()
 
         var currentPackageName: String? = null
         var currentStartTime = 0L
@@ -2071,15 +2325,15 @@ class MainActivity : ComponentActivity() {
             }
 
             when (event.eventType) {
-                android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND,
-                android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
+                UsageEvents.Event.MOVE_TO_FOREGROUND,
+                UsageEvents.Event.ACTIVITY_RESUMED -> {
                     currentPackageName = packageName
                     currentStartTime = event.timeStamp
                 }
 
-                android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND,
-                android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED,
-                android.app.usage.UsageEvents.Event.ACTIVITY_STOPPED -> {
+                UsageEvents.Event.MOVE_TO_BACKGROUND,
+                UsageEvents.Event.ACTIVITY_PAUSED,
+                UsageEvents.Event.ACTIVITY_STOPPED -> {
                     if (currentPackageName == packageName && currentStartTime > 0L) {
                         if (event.timeStamp > currentStartTime) {
                             totalTime += event.timeStamp - currentStartTime
@@ -2145,6 +2399,36 @@ class MainActivity : ComponentActivity() {
 
     private fun getRoleName(): String {
         return memberRole
+    }
+
+    private fun uiText(parentText: String, childText: String): String {
+        return if (isParentMode) {
+            parentText
+        } else {
+            childText
+        }
+    }
+
+    private fun setMessage(parentText: String, childText: String) {
+        message = uiText(parentText, childText)
+    }
+
+    private fun displayRole(role: String): String {
+        return when (role) {
+            "保護者" -> uiText("保護者", "おうちのひと")
+            "子供" -> uiText("子供", "こども")
+            else -> uiText(role, "メンバー")
+        }
+    }
+
+    private fun displayTicketStatus(status: String): String {
+        return when (status) {
+            "未申請" -> "まだ"
+            "承認待ち" -> "まってる"
+            "承認済み" -> "つかえる"
+            "使用済み" -> "つかった"
+            else -> status
+        }
     }
 
     private fun hasUsageStatsPermission(): Boolean {
