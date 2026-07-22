@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +54,10 @@ import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.size
+
 
 data class Ticket(
     val name: String,
@@ -199,15 +206,30 @@ class MainActivity : ComponentActivity() {
                 color = purple
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = "つかうがめんをえらんでください",
-                fontSize = 20.sp,
+                fontSize = 19.sp,
                 color = textDark
             )
 
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { openUsageAccessSettings() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = green),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text(
+                    text = "スマホのじかんをみられるようにする",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -216,29 +238,30 @@ class MainActivity : ComponentActivity() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "👨‍👩‍👧",
-                        fontSize = 64.sp
+                        fontSize = 56.sp
                     )
 
                     Text(
                         text = "おやのがめん",
-                        fontSize = 24.sp,
+                        fontSize = 23.sp,
                         fontWeight = FontWeight.Bold,
                         color = pink
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = "へやをつくったり、こどものじかんをみます",
-                        color = textDark
+                        color = textDark,
+                        fontSize = 14.sp
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
                         onClick = { selectParentMode() },
@@ -251,7 +274,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -260,29 +283,30 @@ class MainActivity : ComponentActivity() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "🐼",
-                        fontSize = 64.sp
+                        fontSize = 56.sp
                     )
 
                     Text(
                         text = "こどものがめん",
-                        fontSize = 24.sp,
+                        fontSize = 23.sp,
                         fontWeight = FontWeight.Bold,
                         color = purple
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = "そざいをあつめて、チケットをつくります",
-                        color = textDark
+                        color = textDark,
+                        fontSize = 14.sp
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
                         onClick = { selectChildMode() },
@@ -333,35 +357,48 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun MainAppScreen() {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundColor)
-                .padding(16.dp)
-        ) {
+        if (currentScreen == "home") {
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                HomeScreen()
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    BottomMenu()
+                }
+            }
+        } else {
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxSize()
+                    .background(backgroundColor)
+                    .padding(16.dp)
             ) {
-                if (currentScreen != "home") {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Header()
 
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    when (currentScreen) {
+                        "craft" -> CraftScreen()
+                        "task" -> TaskScreen()
+                        "graph" -> GraphScreen()
+                        "family" -> FamilyScreen()
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
 
-                when (currentScreen) {
-                    "home" -> HomeScreen()
-                    "craft" -> CraftScreen()
-                    "task" -> TaskScreen()
-                    "graph" -> GraphScreen()
-                    "family" -> FamilyScreen()
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
+                BottomMenu()
             }
-
-            BottomMenu()
         }
     }
 
@@ -447,18 +484,26 @@ class MainActivity : ComponentActivity() {
     private fun HomeScreen() {
         val savedMinutes = (targetMinutes - screenTimeMinutes).coerceAtLeast(0L)
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(30.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF7FF)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
+            Image(
+                painter = painterResource(id = R.drawable.sougen),
+                contentDescription = "home background",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 102.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
@@ -467,11 +512,11 @@ class MainActivity : ComponentActivity() {
                             containerColor = Color.White,
                             contentColor = purple
                         ),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(18.dp)
                     ) {
                         Text(
                             text = "＜",
-                            fontSize = 22.sp,
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -479,247 +524,171 @@ class MainActivity : ComponentActivity() {
                     Text(
                         text = uiText("ホーム", "ぱんだ"),
                         modifier = Modifier.weight(1f),
-                        fontSize = 26.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = textDark
                     )
 
-                    Spacer(modifier = Modifier.width(52.dp))
+                    Spacer(modifier = Modifier.width(58.dp))
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(36.dp))
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(190.dp)
-                        .background(
-                            Color(0xFFEAF7FF),
-                            RoundedCornerShape(26.dp)
-                        )
+                        .height(230.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(id = R.drawable.panda),
+                        contentDescription = "ぱんだ",
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(82.dp)
-                            .background(
-                                Color(0xFFCDEFA9),
-                                RoundedCornerShape(26.dp)
-                            )
-                    )
-
-                    Text(
-                        text = "☁️        ☁️",
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 8.dp),
-                        fontSize = 26.sp
+                            .size(170.dp)
+                            .align(Alignment.Center),
+                        contentScale = ContentScale.Fit
                     )
 
                     Card(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 28.dp, end = 10.dp),
+                            .padding(top = 42.dp, end = 4.dp),
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Text(
                             text = "おはよう！",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = textDark
                         )
                     }
-
-                    Text(
-                        text = "🐼",
-                        modifier = Modifier.align(Alignment.Center),
-                        fontSize = 105.sp
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = cardWhite),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp)
-            ) {
-                Text(
-                    text = uiText("前日の節約時間", "きのうせつやくできたじかん"),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textDark
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "${savedMinutes}${uiText("分", "ふん")}",
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textDark
-                    )
-
-                    Text(
-                        text = uiText(
-                            "目標 ${targetMinutes}分",
-                            "もくひょう ${targetMinutes}ふん"
-                        ),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textDark
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                Text(
-                    text = uiText("獲得できる素材", "もらえるそざい"),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textDark
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFDF7FF)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp)
+                    ) {
+                        Text(
+                            text = uiText("前日の節約時間", "きのうせつやくできたじかん"),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textDark
+                        )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${savedMinutes}${uiText("分", "ふん")}",
+                                fontSize = 34.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textDark
+                            )
+
+                            Text(
+                                text = uiText(
+                                    "目標 ${targetMinutes}分",
+                                    "もくひょう ${targetMinutes}ふん"
+                                ),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textDark
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text(
+                            text = uiText("獲得できる素材", "もらえるそざい"),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textDark
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "🌿",
+                                fontSize = 32.sp
+                            )
+
+                            Text(
+                                text = "${materialCount}${uiText("個", "こ")}",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textDark
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Text(
-                        text = "🪨",
-                        fontSize = 34.sp
-                    )
-
-                    Text(
-                        text = "${materialCount}${uiText("個", "こ")}",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textDark
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = { currentScreen = "craft" },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 6.dp)
-                    .height(58.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = orange),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Text(
-                    text = uiText("🎫 クラフト", "🎫 つくる"),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Button(
-                onClick = { currentScreen = "task" },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 6.dp)
-                    .height(58.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = green),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Text(
-                    text = uiText("✅ やること", "✅ やること"),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        if (isParentMode) {
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = lightPink)
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp)
-                ) {
-                    Text(
-                        text = "目標設定",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = pink
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = targetInput,
-                        onValueChange = { targetInput = it },
-                        label = { Text("1日の目標時間（分）") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     Button(
-                        onClick = { updateTargetTime() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = pink),
+                        onClick = { currentScreen = "craft" },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 7.dp)
+                            .height(58.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = orange),
                         shape = RoundedCornerShape(18.dp)
                     ) {
-                        Text("目標を変更")
+                        Text(
+                            text = uiText("🎫 クラフト", "🎫 つくる"),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Button(
+                        onClick = { currentScreen = "task" },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 7.dp)
+                            .height(58.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = green),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(
+                            text = uiText("✅ やること", "✅ やること"),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = message,
+                    fontSize = 12.sp,
+                    color = textDark
+                )
             }
         }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Button(
-            onClick = { openUsageAccessSettings() },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = purple),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            Text(uiText("使用状況アクセスを許可する", "スマホのじかんをみられるようにする"))
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = { prepareYesterdayRecordAutomatically() },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = green),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            Text(uiText("今すぐ前日データを保存", "きのうのデータをとる"))
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(text = message, color = textDark)
     }
 
     @Composable
@@ -742,7 +711,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "🧱", fontSize = 32.sp)
+                Text(text = "🌿", fontSize = 32.sp)
 
                 Spacer(modifier = Modifier.width(10.dp))
 
@@ -1261,6 +1230,7 @@ class MainActivity : ComponentActivity() {
                             uiText("日付：${record.date}", "ひづけ：${record.date}"),
                             color = textDark
                         )
+
                         Text(
                             uiText(
                                 "使用時間：${record.screenTimeMinutes}分",
@@ -1268,6 +1238,7 @@ class MainActivity : ComponentActivity() {
                             ),
                             color = textDark
                         )
+
                         Text(
                             uiText(
                                 "目標時間：${record.targetMinutes}分",
@@ -1275,6 +1246,7 @@ class MainActivity : ComponentActivity() {
                             ),
                             color = textDark
                         )
+
                         Text(
                             uiText("素材：${record.materialCount}個", "そざい：${record.materialCount}こ"),
                             color = textDark
@@ -1835,15 +1807,6 @@ class MainActivity : ComponentActivity() {
             savedMinutes / materialRate
         } else {
             0L
-        }
-    }
-
-    private fun getAnimalFace(): String {
-        return when {
-            materialCount >= 10 -> "🐼✨"
-            materialCount >= 5 -> "🐼"
-            materialCount >= 1 -> "🐼💧"
-            else -> "🐼💤"
         }
     }
 
