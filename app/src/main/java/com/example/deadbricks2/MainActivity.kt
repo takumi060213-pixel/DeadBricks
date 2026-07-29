@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,10 +55,6 @@ import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.layout.size
-
 
 data class Ticket(
     val name: String,
@@ -92,6 +89,18 @@ data class RoomMember(
     val lastUpdatedDate: String
 )
 
+data class ChildStatus(
+    val memberId: String,
+    val memberName: String,
+    val screenTimeMinutes: Long,
+    val targetMinutes: Long,
+    val materialCount: Long,
+    val lastUpdatedDate: String,
+    val recordDate: String,
+    val tickets: List<Ticket>,
+    val tasks: List<DailyTask>
+)
+
 class MainActivity : ComponentActivity() {
 
     private val db = FirebaseFirestore.getInstance()
@@ -107,6 +116,7 @@ class MainActivity : ComponentActivity() {
     private var lastSavedDate by mutableStateOf("")
     private var lastSavedScreenTimeMinutes by mutableLongStateOf(0L)
     private var lastSavedMaterialCount by mutableLongStateOf(0L)
+    private var lastMaterialRewardDate by mutableStateOf("")
 
     private var targetMinutes by mutableLongStateOf(60L)
     private var targetInput by mutableStateOf("60")
@@ -140,6 +150,7 @@ class MainActivity : ComponentActivity() {
 
     private val historyRecords = mutableStateListOf<DailyRecord>()
     private val roomMembers = mutableStateListOf<RoomMember>()
+    private val childStatusList = mutableStateListOf<ChildStatus>()
 
     private val materialRate = 10L
 
@@ -175,7 +186,11 @@ class MainActivity : ComponentActivity() {
         }
 
         if (hasSelectedRole) {
-            prepareYesterdayRecordAutomatically()
+            if (isParentMode) {
+                loadParentChildStatuses()
+            } else {
+                prepareYesterdayRecordAutomatically()
+            }
         }
     }
 
@@ -185,7 +200,12 @@ class MainActivity : ComponentActivity() {
         if (hasSelectedRole) {
             loadLastAutoSavedRecordFromLocal()
             DailyScreenTimeWorker.scheduleNextDailySave(this)
-            prepareYesterdayRecordAutomatically()
+
+            if (isParentMode) {
+                loadParentChildStatuses()
+            } else {
+                prepareYesterdayRecordAutomatically()
+            }
         }
     }
 
@@ -256,7 +276,7 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "へやをつくったり、こどものじかんをみます",
+                        text = "へやをつくったり、こどものじょうきょうをみます",
                         color = textDark,
                         fontSize = 14.sp
                     )
@@ -327,10 +347,7 @@ class MainActivity : ComponentActivity() {
         memberRole = "保護者"
         message = "親画面にしました"
         saveCommunitySettings()
-
-        if (hasUsageStatsPermission()) {
-            prepareYesterdayRecordAutomatically()
-        }
+        loadParentChildStatuses()
     }
 
     private fun selectChildMode() {
@@ -461,6 +478,10 @@ class MainActivity : ComponentActivity() {
             onClick = {
                 currentScreen = screen
 
+                if (screen == "home" && isParentMode) {
+                    loadParentChildStatuses()
+                }
+
                 if (screen == "graph") {
                     loadLastAutoSavedRecordFromLocal()
                     loadHistoryFromFirebase()
@@ -482,7 +503,321 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun HomeScreen() {
+        if (isParentMode) {
+            ParentHomeScreen()
+        } else {
+            ChildHomeScreen()
+        }
+    }
+
+    @Composable
+    private fun ParentHomeScreen() {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
+                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 102.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { backToRoleSelectScreen() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = purple
+                    ),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Text(
+                        text = "＜",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    text = "親ホーム",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.width(58.dp))
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = lightPink),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp)
+                ) {
+                    Text(
+                        text = "目標時間の設定",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = pink
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = targetInput,
+                            onValueChange = { targetInput = it },
+                            label = { Text("目標時間（分）") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = { updateTargetTime() },
+                            modifier = Modifier.height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = pink),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("変更")
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = { loadParentChildStatuses() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = purple),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text("子供の状況を更新")
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (childStatusList.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardWhite)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "まだ子供のデータがありません",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textDark
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = "家族ルームに子供が参加して、前日データが保存されると表示されます。",
+                                color = textDark
+                            )
+                        }
+                    }
+                } else {
+                    childStatusList.forEachIndexed { childIndex, child ->
+                        ParentChildStatusCard(
+                            childIndex = childIndex,
+                            child = child
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = message,
+                    fontSize = 12.sp,
+                    color = textDark
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun ParentChildStatusCard(
+        childIndex: Int,
+        child: ChildStatus
+    ) {
+        val isAchieved = child.screenTimeMinutes <= child.targetMinutes
+        val waitingTickets = child.tickets
+            .mapIndexed { index, ticket -> index to ticket }
+            .filter { it.second.status == "承認待ち" }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = cardWhite),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
+            ) {
+                Text(
+                    text = "👧 ${child.memberName}",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = purple
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "前日の使用時間：${child.screenTimeMinutes}分",
+                    color = textDark
+                )
+
+                Text(
+                    text = "目標時間：${child.targetMinutes}分",
+                    color = textDark
+                )
+
+                Text(
+                    text = "節約時間：${(child.targetMinutes - child.screenTimeMinutes).coerceAtLeast(0L)}分",
+                    color = textDark
+                )
+
+                Text(
+                    text = "素材：${child.materialCount}個",
+                    color = textDark
+                )
+
+                Text(
+                    text = "更新日：${child.lastUpdatedDate}",
+                    color = textDark
+                )
+
+                Text(
+                    text = if (isAchieved) "状況：目標達成" else "状況：目標超過",
+                    fontWeight = FontWeight.Bold,
+                    color = if (isAchieved) green else pink
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "承認待ちチケット",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (waitingTickets.isEmpty()) {
+                    Text(
+                        text = "承認待ちのチケットはありません",
+                        color = textDark
+                    )
+                } else {
+                    waitingTickets.forEach { pair ->
+                        val ticketIndex = pair.first
+                        val ticket = pair.second
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = lightPurple)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp)
+                            ) {
+                                Text(
+                                    text = "🎟 ${ticket.name}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = textDark
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Button(
+                                    onClick = {
+                                        approveChildTicket(
+                                            childIndex = childIndex,
+                                            ticketIndex = ticketIndex
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = green),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Text("承認する")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "タスク確認",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textDark
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (child.tasks.isEmpty()) {
+                    Text(
+                        text = "タスクはありません",
+                        color = textDark
+                    )
+                } else {
+                    child.tasks.forEach { task ->
+                        Text(
+                            text = if (task.completed) {
+                                "✅ ${task.title}"
+                            } else {
+                                "⬜ ${task.title}"
+                            },
+                            color = textDark
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ChildHomeScreen() {
         val savedMinutes = (targetMinutes - screenTimeMinutes).coerceAtLeast(0L)
+        val pandaMessage = getPandaHealthMessage()
+
+        val pandaSize = when {
+            screenTimeMinutes <= targetMinutes -> 185.dp
+            screenTimeMinutes <= targetMinutes + 30L -> 170.dp
+            else -> 155.dp
+        }
 
         Box(
             modifier = Modifier.fillMaxSize()
@@ -522,7 +857,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Text(
-                        text = uiText("ホーム", "ぱんだ"),
+                        text = "ぱんだ",
                         modifier = Modifier.weight(1f),
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
@@ -532,19 +867,19 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.width(58.dp))
                 }
 
-                Spacer(modifier = Modifier.height(36.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(230.dp),
+                        .height(220.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.panda),
+                        painter = painterResource(id = getPandaImageResource()),
                         contentDescription = "ぱんだ",
                         modifier = Modifier
-                            .size(170.dp)
+                            .size(pandaSize)
                             .align(Alignment.Center),
                         contentScale = ContentScale.Fit
                     )
@@ -558,7 +893,7 @@ class MainActivity : ComponentActivity() {
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Text(
-                            text = "おはよう！",
+                            text = pandaMessage,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -567,7 +902,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(30.dp))
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -576,16 +911,16 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(18.dp)
+                        modifier = Modifier.padding(16.dp)
                     ) {
                         Text(
-                            text = uiText("前日の節約時間", "きのうせつやくできたじかん"),
+                            text = "きのうせつやくできたじかん",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = textDark
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(7.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -593,33 +928,44 @@ class MainActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "${savedMinutes}${uiText("分", "ふん")}",
-                                fontSize = 34.sp,
+                                text = "${savedMinutes}ふん",
+                                fontSize = 32.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textDark
                             )
 
                             Text(
-                                text = uiText(
-                                    "目標 ${targetMinutes}分",
-                                    "もくひょう ${targetMinutes}ふん"
-                                ),
-                                fontSize = 16.sp,
+                                text = "もくひょう ${targetMinutes}ふん",
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textDark
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = uiText("獲得できる素材", "もらえるそざい"),
+                            text = "きのうつかったじかん：${screenTimeMinutes}ふん",
+                            fontSize = 13.sp,
+                            color = textDark
+                        )
+
+                        Text(
+                            text = "ぱんだ：${pandaMessage}",
+                            fontSize = 13.sp,
+                            color = textDark
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "もっているそざい",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = textDark
                         )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -628,12 +974,12 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Text(
                                 text = "🌿",
-                                fontSize = 32.sp
+                                fontSize = 30.sp
                             )
 
                             Text(
-                                text = "${materialCount}${uiText("個", "こ")}",
-                                fontSize = 32.sp,
+                                text = "${materialCount}こ",
+                                fontSize = 30.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textDark
                             )
@@ -657,7 +1003,7 @@ class MainActivity : ComponentActivity() {
                         shape = RoundedCornerShape(18.dp)
                     ) {
                         Text(
-                            text = uiText("🎫 クラフト", "🎫 つくる"),
+                            text = "🎫 つくる",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -673,7 +1019,7 @@ class MainActivity : ComponentActivity() {
                         shape = RoundedCornerShape(18.dp)
                     ) {
                         Text(
-                            text = uiText("✅ やること", "✅ やること"),
+                            text = "✅ やること",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -702,6 +1048,19 @@ class MainActivity : ComponentActivity() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        if (!isParentMode && isInFamilyRoom) {
+            Button(
+                onClick = { loadMyLatestRecordFromFirebase() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = green),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text("チケット情報を更新")
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
@@ -729,53 +1088,55 @@ class MainActivity : ComponentActivity() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = cardWhite)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
+        if (isParentMode) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = cardWhite)
             ) {
-                Text(
-                    text = uiText("報酬チケット追加", "チケットをふやす"),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = purple
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = rewardNameInput,
-                    onValueChange = { rewardNameInput = it },
-                    label = { Text(uiText("チケット名", "チケットのなまえ")) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = rewardCostInput,
-                    onValueChange = { rewardCostInput = it },
-                    label = { Text(uiText("必要素材数", "いるそざいのかず")) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = { addRewardTicketType() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = purple),
-                    shape = RoundedCornerShape(18.dp)
+                Column(
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(uiText("報酬チケットを追加", "チケットをふやす"))
+                    Text(
+                        text = "報酬チケット追加",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = purple
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = rewardNameInput,
+                        onValueChange = { rewardNameInput = it },
+                        label = { Text("チケット名") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = rewardCostInput,
+                        onValueChange = { rewardCostInput = it },
+                        label = { Text("必要素材数") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = { addRewardTicketType() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = purple),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text("報酬チケットを追加")
+                    }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         Text(
             text = uiText("作れるチケット", "つくれるチケット"),
@@ -902,27 +1263,30 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Button(
-                    onClick = { requestApproval(index) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = purple),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text(uiText("親に承認申請する", "おうちのひとにおねがいする"))
+                if (ticket.status == "未申請") {
+                    Button(
+                        onClick = { requestApproval(index) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = purple),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(uiText("親に承認申請する", "おうちのひとにおねがいする"))
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                if (ticket.status == "承認待ち") {
+                    Text(
+                        text = uiText(
+                            "親の承認待ちです",
+                            "おうちのひとのOKまち"
+                        ),
+                        color = textDark
+                    )
 
-                Button(
-                    onClick = { approveTicket(index) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = green),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text(uiText("親が承認する", "OKする"))
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
-
-                Spacer(modifier = Modifier.height(6.dp))
 
                 Button(
                     onClick = { useTicket(index) },
@@ -1146,16 +1510,6 @@ class MainActivity : ComponentActivity() {
                 if (historyRecords.isEmpty()) {
                     Text(
                         text = uiText("まだ保存された履歴がありません", "まだデータはないよ"),
-                        color = textDark
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = uiText(
-                            "家族ルームに参加すると、日付変更後に前日データが自動保存されます",
-                            "かぞくのへやにはいると、データがのこるよ"
-                        ),
                         color = textDark
                     )
                 } else {
@@ -1660,8 +2014,8 @@ class MainActivity : ComponentActivity() {
             .document(roomId)
             .set(roomData)
             .addOnSuccessListener {
-                prepareYesterdayRecordAutomatically()
                 message = "家族ルームを作成しました。招待コードは ${code} です"
+                loadParentChildStatuses()
             }
             .addOnFailureListener {
                 message = "家族ルームの作成に失敗しました"
@@ -1724,22 +2078,41 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        val date = getYesterdayDateString()
         val minutes = getYesterdayScreenTimeMinutes()
+        val earnedMaterial = calculateMaterial(minutes)
 
         screenTimeMinutes = minutes
-        materialCount = calculateMaterial(minutes)
+
+        if (lastMaterialRewardDate != date) {
+            materialCount += earnedMaterial
+            lastMaterialRewardDate = date
+
+            prefs.edit()
+                .putString("lastMaterialRewardDate", lastMaterialRewardDate)
+                .apply()
+
+            setMessage(
+                "前日データを保存しました：${minutes}分、素材を${earnedMaterial}個獲得しました",
+                "きのうのデータをとったよ：${minutes}ふん、そざいを${earnedMaterial}こもらったよ"
+            )
+        } else {
+            setMessage(
+                "前日データは保存済みです：${minutes}分",
+                "きのうのデータはもうとったよ：${minutes}ふん"
+            )
+        }
 
         saveLastRecordToLocal()
 
         if (!isInFamilyRoom) {
             historyRecords.clear()
-            setMessage("前日データを端末に保存しました：${minutes}分", "きのうのデータをとったよ：${minutes}ふん")
             return
         }
 
         saveCurrentStateToFirebase(
-            showMessage = true,
-            successMessage = uiText("前日データを保存しました：${minutes}分", "きのうのデータをとったよ：${minutes}ふん")
+            showMessage = false,
+            successMessage = ""
         )
     }
 
@@ -1754,6 +2127,7 @@ class MainActivity : ComponentActivity() {
             .putString("lastSavedDate", date)
             .putLong("lastSavedScreenTimeMinutes", screenTimeMinutes)
             .putLong("lastSavedMaterialCount", materialCount)
+            .putString("lastMaterialRewardDate", lastMaterialRewardDate)
             .putLong("targetMinutes", targetMinutes)
             .apply()
     }
@@ -1762,6 +2136,7 @@ class MainActivity : ComponentActivity() {
         lastSavedDate = prefs.getString("lastSavedDate", "") ?: ""
         lastSavedScreenTimeMinutes = prefs.getLong("lastSavedScreenTimeMinutes", 0L)
         lastSavedMaterialCount = prefs.getLong("lastSavedMaterialCount", 0L)
+        lastMaterialRewardDate = prefs.getString("lastMaterialRewardDate", "") ?: ""
 
         if (lastSavedDate.isNotBlank()) {
             screenTimeMinutes = lastSavedScreenTimeMinutes
@@ -1783,10 +2158,9 @@ class MainActivity : ComponentActivity() {
             .putLong("targetMinutes", targetMinutes)
             .apply()
 
-        if (hasUsageStatsPermission()) {
+        if (hasUsageStatsPermission() && !isParentMode) {
             val minutes = getYesterdayScreenTimeMinutes()
             screenTimeMinutes = minutes
-            materialCount = calculateMaterial(minutes)
             saveLastRecordToLocal()
         }
 
@@ -1807,6 +2181,38 @@ class MainActivity : ComponentActivity() {
             savedMinutes / materialRate
         } else {
             0L
+        }
+    }
+
+    private fun getPandaHealthMessage(): String {
+        return when {
+            screenTimeMinutes <= targetMinutes -> {
+                "げんき！"
+            }
+
+            screenTimeMinutes <= targetMinutes + 30L -> {
+                "ちょっとつかれた"
+            }
+
+            else -> {
+                "ぐったり…"
+            }
+        }
+    }
+
+    private fun getPandaImageResource(): Int {
+        return when {
+            screenTimeMinutes <= targetMinutes -> {
+                R.drawable.panda_good
+            }
+
+            screenTimeMinutes <= targetMinutes + 30L -> {
+                R.drawable.panda_tired
+            }
+
+            else -> {
+                R.drawable.panda_bad
+            }
         }
     }
 
@@ -1863,16 +2269,65 @@ class MainActivity : ComponentActivity() {
 
     private fun requestApproval(index: Int) {
         val ticket = tickets[index]
+
+        if (ticket.status != "未申請") {
+            setMessage("このチケットはすでに申請されています", "もうおねがいしているよ")
+            return
+        }
+
         tickets[index] = ticket.copy(status = "承認待ち")
         setMessage("${ticket.name}を親に承認申請しました", "${ticket.name}をおねがいしたよ")
         autoSaveCurrentStateSilently()
     }
 
-    private fun approveTicket(index: Int) {
-        val ticket = tickets[index]
-        tickets[index] = ticket.copy(status = "承認済み")
-        setMessage("${ticket.name}が承認されました", "${ticket.name}がOKになったよ")
-        autoSaveCurrentStateSilently()
+    private fun approveChildTicket(
+        childIndex: Int,
+        ticketIndex: Int
+    ) {
+        if (childIndex < 0 || childIndex >= childStatusList.size) {
+            return
+        }
+
+        val child = childStatusList[childIndex]
+
+        if (ticketIndex < 0 || ticketIndex >= child.tickets.size) {
+            return
+        }
+
+        if (child.recordDate.isBlank()) {
+            message = "保存データがないため承認できません"
+            return
+        }
+
+        val updatedTickets = child.tickets.toMutableList()
+        val ticket = updatedTickets[ticketIndex]
+
+        updatedTickets[ticketIndex] = ticket.copy(status = "承認済み")
+
+        val ticketMapList = updatedTickets.map {
+            mapOf(
+                "name" to it.name,
+                "status" to it.status
+            )
+        }
+
+        db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .document(child.memberId)
+            .collection("dailyRecords")
+            .document(child.recordDate)
+            .update("tickets", ticketMapList)
+            .addOnSuccessListener {
+                childStatusList[childIndex] = child.copy(
+                    tickets = updatedTickets
+                )
+
+                message = "${child.memberName}の${ticket.name}を承認しました"
+            }
+            .addOnFailureListener {
+                message = "チケットの承認に失敗しました"
+            }
     }
 
     private fun useTicket(index: Int) {
@@ -2024,9 +2479,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadRecordIntoState(document: DocumentSnapshot) {
-        screenTimeMinutes = document.getLong("screenTimeMinutes") ?: 0L
-        targetMinutes = document.getLong("targetMinutes") ?: 60L
-        materialCount = document.getLong("materialCount") ?: 0L
+        screenTimeMinutes = document.getLong("screenTimeMinutes") ?: screenTimeMinutes
+        targetMinutes = document.getLong("targetMinutes") ?: targetMinutes
+        materialCount = document.getLong("materialCount") ?: materialCount
         targetInput = targetMinutes.toString()
 
         val savedMemberName = document.getString("memberName")
@@ -2092,6 +2547,165 @@ class MainActivity : ComponentActivity() {
             tasks.add(DailyTask("けいさんドリルをする", false))
             tasks.add(DailyTask("ほんをよむ", false))
         }
+    }
+
+    private fun loadMyLatestRecordFromFirebase(showMessage: Boolean = true) {
+        if (!isInFamilyRoom) {
+            if (showMessage) {
+                setMessage("家族ルームに参加していません", "へやにはいっていないよ")
+            }
+            return
+        }
+
+        db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .document(getMemberId())
+            .collection("dailyRecords")
+            .orderBy("date", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { result ->
+                if (result.isEmpty) {
+                    if (showMessage) {
+                        setMessage("保存データがありません", "まだデータがないよ")
+                    }
+                    return@addOnSuccessListener
+                }
+
+                loadRecordIntoState(result.documents.first())
+
+                if (showMessage) {
+                    setMessage("チケット情報を更新しました", "チケットをこうしんしたよ")
+                }
+            }
+            .addOnFailureListener {
+                if (showMessage) {
+                    setMessage("チケット情報の更新に失敗しました", "チケットをこうしんできなかったよ")
+                }
+            }
+    }
+
+    private fun loadParentChildStatuses() {
+        childStatusList.clear()
+
+        if (!isInFamilyRoom) {
+            message = "家族ルームに参加していません"
+            return
+        }
+
+        message = "子供の状況を読み込み中です"
+
+        db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .get()
+            .addOnSuccessListener { memberResult ->
+                if (memberResult.isEmpty) {
+                    message = "このルームにはまだメンバーがいません"
+                    return@addOnSuccessListener
+                }
+
+                val childMembers = memberResult.documents.filter { document ->
+                    val role = document.getString("role") ?: ""
+                    role != "保護者"
+                }
+
+                if (childMembers.isEmpty()) {
+                    message = "子供メンバーがまだいません"
+                    return@addOnSuccessListener
+                }
+
+                childMembers.forEach { memberDocument ->
+                    val childMemberId = memberDocument.getString("memberId") ?: memberDocument.id
+                    val childMemberName = memberDocument.getString("memberName") ?: "名前なし"
+
+                    db.collection("familyRooms")
+                        .document(getRoomId())
+                        .collection("members")
+                        .document(childMemberId)
+                        .collection("dailyRecords")
+                        .orderBy("date", Query.Direction.DESCENDING)
+                        .limit(1)
+                        .get()
+                        .addOnSuccessListener { recordResult ->
+                            if (recordResult.isEmpty) {
+                                childStatusList.add(
+                                    ChildStatus(
+                                        memberId = childMemberId,
+                                        memberName = childMemberName,
+                                        screenTimeMinutes = memberDocument.getLong("screenTimeMinutes") ?: 0L,
+                                        targetMinutes = memberDocument.getLong("targetMinutes") ?: targetMinutes,
+                                        materialCount = memberDocument.getLong("materialCount") ?: 0L,
+                                        lastUpdatedDate = memberDocument.getString("lastUpdatedDate") ?: "-",
+                                        recordDate = "",
+                                        tickets = emptyList(),
+                                        tasks = emptyList()
+                                    )
+                                )
+
+                                message = "子供の状況を読み込みました"
+                                return@addOnSuccessListener
+                            }
+
+                            val record = recordResult.documents.first()
+
+                            val ticketsFromRecord = mutableListOf<Ticket>()
+                            val ticketList = record.get("tickets") as? List<*>
+
+                            ticketList?.forEach { item ->
+                                val map = item as? Map<*, *>
+                                val name = map?.get("name") as? String ?: return@forEach
+                                val status = map["status"] as? String ?: "未申請"
+
+                                ticketsFromRecord.add(
+                                    Ticket(
+                                        name = name,
+                                        status = status
+                                    )
+                                )
+                            }
+
+                            val tasksFromRecord = mutableListOf<DailyTask>()
+                            val taskList = record.get("tasks") as? List<*>
+
+                            taskList?.forEach { item ->
+                                val map = item as? Map<*, *>
+                                val title = map?.get("title") as? String ?: return@forEach
+                                val completed = map["completed"] as? Boolean ?: false
+
+                                tasksFromRecord.add(
+                                    DailyTask(
+                                        title = title,
+                                        completed = completed
+                                    )
+                                )
+                            }
+
+                            childStatusList.add(
+                                ChildStatus(
+                                    memberId = childMemberId,
+                                    memberName = record.getString("memberName") ?: childMemberName,
+                                    screenTimeMinutes = record.getLong("screenTimeMinutes") ?: 0L,
+                                    targetMinutes = record.getLong("targetMinutes") ?: targetMinutes,
+                                    materialCount = record.getLong("materialCount") ?: 0L,
+                                    lastUpdatedDate = record.getString("date") ?: "-",
+                                    recordDate = record.getString("date") ?: record.id,
+                                    tickets = ticketsFromRecord,
+                                    tasks = tasksFromRecord
+                                )
+                            )
+
+                            message = "子供の状況を読み込みました"
+                        }
+                        .addOnFailureListener {
+                            message = "子供の記録を読み込めませんでした"
+                        }
+                }
+            }
+            .addOnFailureListener {
+                message = "子供の状況を読み込めませんでした"
+            }
     }
 
     private fun loadHistoryFromFirebase(showMessage: Boolean = true) {
@@ -2216,6 +2830,7 @@ class MainActivity : ComponentActivity() {
             .putString("memberRole", memberRole)
             .putBoolean("isInFamilyRoom", isInFamilyRoom)
             .putLong("targetMinutes", targetMinutes)
+            .putString("lastMaterialRewardDate", lastMaterialRewardDate)
             .apply()
     }
 
@@ -2231,6 +2846,7 @@ class MainActivity : ComponentActivity() {
 
         targetMinutes = prefs.getLong("targetMinutes", 60L)
         targetInput = targetMinutes.toString()
+        lastMaterialRewardDate = prefs.getString("lastMaterialRewardDate", "") ?: ""
 
         isParentMode = memberRole == "保護者"
 
