@@ -52,6 +52,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -704,7 +705,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "素材：${child.materialCount}個",
+                    text = "持っている素材：${child.materialCount}個",
                     color = textDark
                 )
 
@@ -2012,7 +2013,7 @@ class MainActivity : ComponentActivity() {
 
         db.collection("familyRooms")
             .document(roomId)
-            .set(roomData)
+            .set(roomData, SetOptions.merge())
             .addOnSuccessListener {
                 message = "家族ルームを作成しました。招待コードは ${code} です"
                 loadParentChildStatuses()
@@ -2110,10 +2111,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        saveCurrentStateToFirebase(
-            showMessage = false,
-            successMessage = ""
-        )
+        saveScreenTimeOnlyToFirebase()
     }
 
     private fun saveLastRecordToLocal() {
@@ -2165,10 +2163,8 @@ class MainActivity : ComponentActivity() {
         }
 
         if (isInFamilyRoom) {
-            saveCurrentStateToFirebase(
-                showMessage = true,
-                successMessage = "目標時間を${targetMinutes}分に変更しました"
-            )
+            saveScreenTimeOnlyToFirebase()
+            message = "目標時間を${targetMinutes}分に変更しました"
         } else {
             message = "目標時間を${targetMinutes}分に変更しました"
         }
@@ -2302,6 +2298,11 @@ class MainActivity : ComponentActivity() {
         val updatedTickets = child.tickets.toMutableList()
         val ticket = updatedTickets[ticketIndex]
 
+        if (ticket.status != "承認待ち") {
+            message = "承認待ちのチケットではありません"
+            return
+        }
+
         updatedTickets[ticketIndex] = ticket.copy(status = "承認済み")
 
         val ticketMapList = updatedTickets.map {
@@ -2311,13 +2312,18 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        val updateData = hashMapOf(
+            "tickets" to ticketMapList,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
         db.collection("familyRooms")
             .document(getRoomId())
             .collection("members")
             .document(child.memberId)
             .collection("dailyRecords")
             .document(child.recordDate)
-            .update("tickets", ticketMapList)
+            .set(updateData, SetOptions.merge())
             .addOnSuccessListener {
                 childStatusList[childIndex] = child.copy(
                     tickets = updatedTickets
@@ -2381,6 +2387,53 @@ class MainActivity : ComponentActivity() {
             showMessage = false,
             successMessage = ""
         )
+    }
+
+    private fun saveScreenTimeOnlyToFirebase() {
+        if (!isInFamilyRoom) {
+            return
+        }
+
+        val date = getYesterdayDateString()
+
+        val memberData = hashMapOf(
+            "roomId" to getRoomId(),
+            "memberId" to getMemberId(),
+            "memberName" to getMemberName(),
+            "role" to getRoleName(),
+            "screenTimeMinutes" to screenTimeMinutes,
+            "targetMinutes" to targetMinutes,
+            "materialCount" to materialCount,
+            "lastUpdatedDate" to date,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
+        val dailyData = hashMapOf(
+            "date" to date,
+            "roomId" to getRoomId(),
+            "memberId" to getMemberId(),
+            "memberName" to getMemberName(),
+            "role" to getRoleName(),
+            "screenTimeMinutes" to screenTimeMinutes,
+            "targetMinutes" to targetMinutes,
+            "materialCount" to materialCount,
+            "savedBy" to "screenTimeOnly",
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
+        val memberRef = db.collection("familyRooms")
+            .document(getRoomId())
+            .collection("members")
+            .document(getMemberId())
+
+        memberRef
+            .set(memberData, SetOptions.merge())
+            .addOnSuccessListener {
+                memberRef
+                    .collection("dailyRecords")
+                    .document(date)
+                    .set(dailyData, SetOptions.merge())
+            }
     }
 
     private fun saveCurrentStateToFirebase(
@@ -2451,12 +2504,12 @@ class MainActivity : ComponentActivity() {
             .document(getMemberId())
 
         memberRef
-            .set(memberData)
+            .set(memberData, SetOptions.merge())
             .addOnSuccessListener {
                 memberRef
                     .collection("dailyRecords")
                     .document(date)
-                    .set(dailyData)
+                    .set(dailyData, SetOptions.merge())
                     .addOnSuccessListener {
                         if (showMessage) {
                             message = successMessage
