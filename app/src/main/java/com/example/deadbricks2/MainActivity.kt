@@ -1343,14 +1343,8 @@ class MainActivity : ComponentActivity() {
             .distinctBy { it.date }
             .sortedBy { it.date }
 
-        val latestRecord = graphRecords.maxByOrNull { it.date }
-
-        val displayScreenTime = latestRecord?.screenTimeMinutes ?: screenTimeMinutes
-        val displayMaterial = latestRecord?.materialCount ?: materialCount
-        val displayDate = latestRecord?.date ?: lastSavedDate
-
         Text(
-            text = uiText("ぼくのグラフ", "ぼくのぐらふ"),
+            text = "しようじかん",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = purple
@@ -1358,73 +1352,22 @@ class MainActivity : ComponentActivity() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = cardWhite)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "スマホからとったデータをみます",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textDark
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = uiText(
-                        "日付：${if (displayDate.isBlank()) "未保存" else displayDate}",
-                        "ひづけ：${if (displayDate.isBlank()) "まだ" else displayDate}"
-                    ),
-                    color = textDark
-                )
-
-                Text(
-                    text = uiText(
-                        "スクリーンタイム：${displayScreenTime}分",
-                        "すくりーんたいむ：${displayScreenTime}ふん"
-                    ),
-                    color = textDark
-                )
-
-                Text(
-                    text = uiText(
-                        "節約時間：${calculateSavedTimeForDisplay(displayScreenTime)}分",
-                        "せつやく：${calculateSavedTimeForDisplay(displayScreenTime)}ふん"
-                    ),
-                    color = textDark
-                )
-
-                Text(
-                    text = uiText(
-                        "持っている素材：${displayMaterial}個",
-                        "もっているそざい：${displayMaterial}こ"
-                    ),
-                    color = textDark
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = {
-                        if (!isParentMode) {
-                            refreshLast7DaysUsageToFirebase()
-                        } else {
-                            loadHistoryFromFirebase()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = purple),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text(uiText("グラフを更新", "ぐらふをこうしん"))
+        Button(
+            onClick = {
+                if (!isParentMode) {
+                    refreshLast7DaysUsageToFirebase()
+                } else {
+                    loadHistoryFromFirebase()
                 }
-            }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = purple),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Text(uiText("グラフを更新", "ぐらふをこうしん"))
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1435,27 +1378,6 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(text = uiText("平均", "へいきん"), color = textDark)
-
-                val average = if (graphRecords.isEmpty()) {
-                    0L
-                } else {
-                    graphRecords.map { it.screenTimeMinutes }.average().toLong()
-                }
-
-                Text(
-                    text = if (graphRecords.isEmpty()) {
-                        "--${uiText("分", "ふん")}"
-                    } else {
-                        "${average}${uiText("分", "ふん")}"
-                    },
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = purple
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
                 if (graphRecords.isEmpty()) {
                     Text(
                         text = uiText(
@@ -1472,7 +1394,7 @@ class MainActivity : ComponentActivity() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(210.dp)
+                            .height(230.dp)
                             .horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.Bottom
                     ) {
@@ -1483,7 +1405,7 @@ class MainActivity : ComponentActivity() {
                                 verticalArrangement = Arrangement.Bottom
                             ) {
                                 val barHeight =
-                                    ((record.screenTimeMinutes.toDouble() / maxMinutes.toDouble()) * 150.0)
+                                    ((record.screenTimeMinutes.toDouble() / maxMinutes.toDouble()) * 170.0)
                                         .toInt()
                                         .coerceAtLeast(8)
 
@@ -1518,65 +1440,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (graphRecords.isNotEmpty()) {
-            graphRecords
-                .sortedByDescending { it.date }
-                .forEach { record ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = lightPurple)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                uiText("日付：${record.date}", "ひづけ：${record.date}"),
-                                color = textDark
-                            )
-
-                            Text(
-                                uiText(
-                                    "スクリーンタイム：${record.screenTimeMinutes}分",
-                                    "すくりーんたいむ：${record.screenTimeMinutes}ふん"
-                                ),
-                                color = textDark
-                            )
-
-                            Text(
-                                uiText(
-                                    "目標時間：${record.targetMinutes}分",
-                                    "もくひょう：${record.targetMinutes}ふん"
-                                ),
-                                color = textDark
-                            )
-
-                            Text(
-                                uiText(
-                                    "節約時間：${calculateSavedTimeForDisplay(record.screenTimeMinutes)}分",
-                                    "せつやく：${calculateSavedTimeForDisplay(record.screenTimeMinutes)}ふん"
-                                ),
-                                color = textDark
-                            )
-
-                            Text(
-                                uiText(
-                                    "持っている素材：${record.materialCount}個",
-                                    "もっているそざい：${record.materialCount}こ"
-                                ),
-                                color = textDark
-                            )
-                        }
-                    }
-                }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(text = message, color = textDark)
     }
 
     @Composable
