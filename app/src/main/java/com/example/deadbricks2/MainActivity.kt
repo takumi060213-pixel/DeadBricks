@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
     private val roomMembers = mutableStateListOf<RoomMember>()
     private val childStatusList = mutableStateListOf<ChildStatus>()
 
-    private val materialRate = 10L
+    private val materialRate = 1L
 
     private val backgroundColor = Color(0xFFF2F8E8)
     private val purple = Color(0xFF6D4FD8)
@@ -700,7 +700,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Text(
-                    text = "節約時間：${(child.targetMinutes - child.screenTimeMinutes).coerceAtLeast(0L)}分",
+                    text = "節約時間：${calculateSavedTimeForDisplay(child.screenTimeMinutes)}分",
                     color = textDark
                 )
 
@@ -811,7 +811,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun ChildHomeScreen() {
-        val savedMinutes = (targetMinutes - screenTimeMinutes).coerceAtLeast(0L)
+        val savedMinutes = calculateSavedTimeForDisplay(screenTimeMinutes)
         val pandaMessage = getPandaHealthMessage()
 
         val pandaSize = when {
@@ -1393,6 +1393,12 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun GraphScreen() {
+        val latestRecord = historyRecords.maxByOrNull { it.date }
+
+        val displayScreenTime = latestRecord?.screenTimeMinutes ?: screenTimeMinutes
+        val displayMaterial = latestRecord?.materialCount ?: materialCount
+        val displayDate = latestRecord?.date ?: lastSavedDate
+
         Text(
             text = uiText("ぼくのグラフ", "ぼくのぐらふ"),
             fontSize = 24.sp,
@@ -1412,7 +1418,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text(
                     text = uiText(
-                        "自動保存された前日データを表示します",
+                        "保存された前日データを表示します",
                         "きのうのデータをみます"
                     ),
                     fontSize = 18.sp,
@@ -1424,25 +1430,33 @@ class MainActivity : ComponentActivity() {
 
                 Text(
                     text = uiText(
-                        "前日の使用時間：${screenTimeMinutes}分",
-                        "きのうのじかん：${screenTimeMinutes}ふん"
+                        "表示中の日付：${if (displayDate.isBlank()) "未保存" else displayDate}",
+                        "ひづけ：${if (displayDate.isBlank()) "まだ" else displayDate}"
                     ),
                     color = textDark
                 )
 
                 Text(
-                    text = uiText("素材：${materialCount}個", "そざい：${materialCount}こ"),
+                    text = uiText(
+                        "スクリーンタイム：${displayScreenTime}分",
+                        "すくりーんたいむ：${displayScreenTime}ふん"
+                    ),
                     color = textDark
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = uiText(
+                        "節約時間：${calculateSavedTimeForDisplay(displayScreenTime)}分",
+                        "せつやく：${calculateSavedTimeForDisplay(displayScreenTime)}ふん"
+                    ),
+                    color = textDark
+                )
 
                 Text(
-                    text = if (lastSavedDate.isBlank()) {
-                        uiText("最終自動保存日：未保存", "まだデータはないよ")
-                    } else {
-                        uiText("最終自動保存日：${lastSavedDate}", "さいごにとったひ：${lastSavedDate}")
-                    },
+                    text = uiText(
+                        "持っている素材：${displayMaterial}個",
+                        "もっているそざい：${displayMaterial}こ"
+                    ),
                     color = textDark
                 )
 
@@ -1462,13 +1476,18 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Button(
-                    onClick = { prepareYesterdayRecordAutomatically() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = green),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Text(uiText("今すぐ前日データを保存", "いまデータをとる"))
+                if (!isParentMode) {
+                    Button(
+                        onClick = {
+                            prepareYesterdayRecordAutomatically()
+                            loadHistoryFromFirebase()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = green),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(uiText("今すぐ前日データを保存", "いまデータをとる"))
+                    }
                 }
             }
         }
@@ -1510,11 +1529,14 @@ class MainActivity : ComponentActivity() {
 
                 if (historyRecords.isEmpty()) {
                     Text(
-                        text = uiText("まだ保存された履歴がありません", "まだデータはないよ"),
+                        text = uiText(
+                            "まだ保存された履歴がありません",
+                            "まだデータはないよ"
+                        ),
                         color = textDark
                     )
                 } else {
-                    val records = historyRecords.reversed()
+                    val records = historyRecords.sortedBy { it.date }
                     val maxMinutes = records
                         .maxOfOrNull { it.screenTimeMinutes }
                         ?.coerceAtLeast(1L) ?: 1L
@@ -1531,9 +1553,10 @@ class MainActivity : ComponentActivity() {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Bottom
                             ) {
-                                val barHeight = ((record.screenTimeMinutes.toDouble() / maxMinutes.toDouble()) * 150.0)
-                                    .toInt()
-                                    .coerceAtLeast(8)
+                                val barHeight =
+                                    ((record.screenTimeMinutes.toDouble() / maxMinutes.toDouble()) * 150.0)
+                                        .toInt()
+                                        .coerceAtLeast(8)
 
                                 Text(
                                     text = "${record.screenTimeMinutes}${uiText("分", "ふん")}",
@@ -1570,45 +1593,58 @@ class MainActivity : ComponentActivity() {
         Spacer(modifier = Modifier.height(12.dp))
 
         if (historyRecords.isNotEmpty()) {
-            historyRecords.forEach { record ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 5.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = lightPurple)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp)
+            historyRecords
+                .sortedByDescending { it.date }
+                .forEach { record ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 5.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = lightPurple)
                     ) {
-                        Text(
-                            uiText("日付：${record.date}", "ひづけ：${record.date}"),
-                            color = textDark
-                        )
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            Text(
+                                uiText("日付：${record.date}", "ひづけ：${record.date}"),
+                                color = textDark
+                            )
 
-                        Text(
-                            uiText(
-                                "使用時間：${record.screenTimeMinutes}分",
-                                "つかったじかん：${record.screenTimeMinutes}ふん"
-                            ),
-                            color = textDark
-                        )
+                            Text(
+                                uiText(
+                                    "スクリーンタイム：${record.screenTimeMinutes}分",
+                                    "すくりーんたいむ：${record.screenTimeMinutes}ふん"
+                                ),
+                                color = textDark
+                            )
 
-                        Text(
-                            uiText(
-                                "目標時間：${record.targetMinutes}分",
-                                "もくひょう：${record.targetMinutes}ふん"
-                            ),
-                            color = textDark
-                        )
+                            Text(
+                                uiText(
+                                    "目標時間：${record.targetMinutes}分",
+                                    "もくひょう：${record.targetMinutes}ふん"
+                                ),
+                                color = textDark
+                            )
 
-                        Text(
-                            uiText("素材：${record.materialCount}個", "そざい：${record.materialCount}こ"),
-                            color = textDark
-                        )
+                            Text(
+                                uiText(
+                                    "節約時間：${calculateSavedTimeForDisplay(record.screenTimeMinutes)}分",
+                                    "せつやく：${calculateSavedTimeForDisplay(record.screenTimeMinutes)}ふん"
+                                ),
+                                color = textDark
+                            )
+
+                            Text(
+                                uiText(
+                                    "持っている素材：${record.materialCount}個",
+                                    "もっているそざい：${record.materialCount}こ"
+                                ),
+                                color = textDark
+                            )
+                        }
                     }
                 }
-            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -1715,6 +1751,14 @@ class MainActivity : ComponentActivity() {
                                 text = uiText(
                                     "前日の使用時間：${member.screenTimeMinutes}分",
                                     "きのうのじかん：${member.screenTimeMinutes}ふん"
+                                ),
+                                color = textDark
+                            )
+
+                            Text(
+                                text = uiText(
+                                    "節約時間：${calculateSavedTimeForDisplay(member.screenTimeMinutes)}分",
+                                    "せつやく：${calculateSavedTimeForDisplay(member.screenTimeMinutes)}ふん"
                                 ),
                                 color = textDark
                             )
@@ -2171,13 +2215,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun calculateMaterial(minutes: Long): Long {
-        val savedMinutes = targetMinutes - minutes
+        val savedByGoal = (targetMinutes - minutes).coerceAtLeast(0L)
+        return savedByGoal / materialRate
+    }
 
-        return if (savedMinutes > 0) {
-            savedMinutes / materialRate
-        } else {
-            0L
-        }
+    private fun calculateSavedTimeForDisplay(minutes: Long): Long {
+        val oneDayMinutes = 24L * 60L
+        return (oneDayMinutes - minutes).coerceAtLeast(0L)
     }
 
     private fun getPandaHealthMessage(): String {
