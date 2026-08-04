@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -262,10 +263,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "👨‍👩‍👧",
-                        fontSize = 56.sp
-                    )
+                    Text(text = "👨‍👩‍👧", fontSize = 56.sp)
 
                     Text(
                         text = "おやのがめん",
@@ -307,10 +305,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "🐼",
-                        fontSize = 56.sp
-                    )
+                    Text(text = "🐼", fontSize = 56.sp)
 
                     Text(
                         text = "こどものがめん",
@@ -485,7 +480,12 @@ class MainActivity : ComponentActivity() {
 
                 if (screen == "graph") {
                     loadLastAutoSavedRecordFromLocal()
-                    loadHistoryFromFirebase()
+
+                    if (!isParentMode) {
+                        refreshLast7DaysUsageToFirebase()
+                    } else {
+                        loadHistoryFromFirebase()
+                    }
                 }
 
                 if (screen == "family") {
@@ -559,9 +559,7 @@ class MainActivity : ComponentActivity() {
                 colors = CardDefaults.cardColors(containerColor = lightPink),
                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp)
-                ) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
                         text = "目標時間の設定",
                         fontSize = 18.sp,
@@ -621,9 +619,7 @@ class MainActivity : ComponentActivity() {
                         shape = RoundedCornerShape(22.dp),
                         colors = CardDefaults.cardColors(containerColor = cardWhite)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = "まだ子供のデータがありません",
                                 fontSize = 17.sp,
@@ -677,9 +673,7 @@ class MainActivity : ComponentActivity() {
             colors = CardDefaults.cardColors(containerColor = cardWhite),
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(14.dp)
-            ) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = "👧 ${child.memberName}",
                     fontSize = 20.sp,
@@ -689,30 +683,11 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                Text(
-                    text = "前日の使用時間：${child.screenTimeMinutes}分",
-                    color = textDark
-                )
-
-                Text(
-                    text = "目標時間：${child.targetMinutes}分",
-                    color = textDark
-                )
-
-                Text(
-                    text = "節約時間：${calculateSavedTimeForDisplay(child.screenTimeMinutes)}分",
-                    color = textDark
-                )
-
-                Text(
-                    text = "持っている素材：${child.materialCount}個",
-                    color = textDark
-                )
-
-                Text(
-                    text = "更新日：${child.lastUpdatedDate}",
-                    color = textDark
-                )
+                Text(text = "前日の使用時間：${child.screenTimeMinutes}分", color = textDark)
+                Text(text = "目標時間：${child.targetMinutes}分", color = textDark)
+                Text(text = "節約時間：${calculateSavedTimeForDisplay(child.screenTimeMinutes)}分", color = textDark)
+                Text(text = "持っている素材：${child.materialCount}個", color = textDark)
+                Text(text = "更新日：${child.lastUpdatedDate}", color = textDark)
 
                 Text(
                     text = if (isAchieved) "状況：目標達成" else "状況：目標超過",
@@ -732,10 +707,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(6.dp))
 
                 if (waitingTickets.isEmpty()) {
-                    Text(
-                        text = "承認待ちのチケットはありません",
-                        color = textDark
-                    )
+                    Text(text = "承認待ちのチケットはありません", color = textDark)
                 } else {
                     waitingTickets.forEach { pair ->
                         val ticketIndex = pair.first
@@ -748,9 +720,7 @@ class MainActivity : ComponentActivity() {
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = lightPurple)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(10.dp)
-                            ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
                                 Text(
                                     text = "🎟 ${ticket.name}",
                                     fontWeight = FontWeight.Bold,
@@ -789,18 +759,11 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(6.dp))
 
                 if (child.tasks.isEmpty()) {
-                    Text(
-                        text = "タスクはありません",
-                        color = textDark
-                    )
+                    Text(text = "タスクはありません", color = textDark)
                 } else {
                     child.tasks.forEach { task ->
                         Text(
-                            text = if (task.completed) {
-                                "✅ ${task.title}"
-                            } else {
-                                "⬜ ${task.title}"
-                            },
+                            text = if (task.completed) "✅ ${task.title}" else "⬜ ${task.title}",
                             color = textDark
                         )
                     }
@@ -820,9 +783,7 @@ class MainActivity : ComponentActivity() {
             else -> 155.dp
         }
 
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Image(
                 painter = painterResource(id = R.drawable.sougen),
                 contentDescription = "home background",
@@ -911,9 +872,7 @@ class MainActivity : ComponentActivity() {
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFDF7FF)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "きのうせつやくできたじかん",
                             fontSize = 15.sp,
@@ -973,10 +932,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "🌿",
-                                fontSize = 30.sp
-                            )
+                            Text(text = "🌿", fontSize = 30.sp)
 
                             Text(
                                 text = "${materialCount}こ",
@@ -1095,9 +1051,7 @@ class MainActivity : ComponentActivity() {
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = cardWhite)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "報酬チケット追加",
                         fontSize = 18.sp,
@@ -1156,12 +1110,8 @@ class MainActivity : ComponentActivity() {
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = cardWhite)
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(text = "🎫", fontSize = 34.sp)
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1244,9 +1194,7 @@ class MainActivity : ComponentActivity() {
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = lightPurple)
         ) {
-            Column(
-                modifier = Modifier.padding(14.dp)
-            ) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = "🎟 ${ticket.name}",
                     fontSize = 17.sp,
@@ -1317,9 +1265,7 @@ class MainActivity : ComponentActivity() {
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = cardWhite)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 OutlinedTextField(
                     value = taskInput,
                     onValueChange = { taskInput = it },
@@ -1393,7 +1339,11 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun GraphScreen() {
-        val latestRecord = historyRecords.maxByOrNull { it.date }
+        val graphRecords = historyRecords
+            .distinctBy { it.date }
+            .sortedBy { it.date }
+
+        val latestRecord = graphRecords.maxByOrNull { it.date }
 
         val displayScreenTime = latestRecord?.screenTimeMinutes ?: screenTimeMinutes
         val displayMaterial = latestRecord?.materialCount ?: materialCount
@@ -1413,14 +1363,9 @@ class MainActivity : ComponentActivity() {
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = cardWhite)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = uiText(
-                        "保存された前日データを表示します",
-                        "きのうのデータをみます"
-                    ),
+                    text = "スマホからとったデータをみます",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = textDark
@@ -1430,7 +1375,7 @@ class MainActivity : ComponentActivity() {
 
                 Text(
                     text = uiText(
-                        "表示中の日付：${if (displayDate.isBlank()) "未保存" else displayDate}",
+                        "日付：${if (displayDate.isBlank()) "未保存" else displayDate}",
                         "ひづけ：${if (displayDate.isBlank()) "まだ" else displayDate}"
                     ),
                     color = textDark
@@ -1464,30 +1409,17 @@ class MainActivity : ComponentActivity() {
 
                 Button(
                     onClick = {
-                        loadLastAutoSavedRecordFromLocal()
-                        loadHistoryFromFirebase()
+                        if (!isParentMode) {
+                            refreshLast7DaysUsageToFirebase()
+                        } else {
+                            loadHistoryFromFirebase()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = purple),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Text(uiText("グラフを更新", "ぐらふをこうしん"))
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (!isParentMode) {
-                    Button(
-                        onClick = {
-                            prepareYesterdayRecordAutomatically()
-                            loadHistoryFromFirebase()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = green),
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Text(uiText("今すぐ前日データを保存", "いまデータをとる"))
-                    }
                 }
             }
         }
@@ -1503,19 +1435,16 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = uiText("保存済みデータの平均", "へいきん"),
-                    color = textDark
-                )
+                Text(text = uiText("平均", "へいきん"), color = textDark)
 
-                val average = if (historyRecords.isEmpty()) {
+                val average = if (graphRecords.isEmpty()) {
                     0L
                 } else {
-                    historyRecords.map { it.screenTimeMinutes }.average().toLong()
+                    graphRecords.map { it.screenTimeMinutes }.average().toLong()
                 }
 
                 Text(
-                    text = if (historyRecords.isEmpty()) {
+                    text = if (graphRecords.isEmpty()) {
                         "--${uiText("分", "ふん")}"
                     } else {
                         "${average}${uiText("分", "ふん")}"
@@ -1527,7 +1456,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                if (historyRecords.isEmpty()) {
+                if (graphRecords.isEmpty()) {
                     Text(
                         text = uiText(
                             "まだ保存された履歴がありません",
@@ -1536,20 +1465,20 @@ class MainActivity : ComponentActivity() {
                         color = textDark
                     )
                 } else {
-                    val records = historyRecords.sortedBy { it.date }
-                    val maxMinutes = records
+                    val maxMinutes = graphRecords
                         .maxOfOrNull { it.screenTimeMinutes }
                         ?.coerceAtLeast(1L) ?: 1L
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(190.dp),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                            .height(210.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        records.forEach { record ->
+                        graphRecords.forEach { record ->
                             Column(
+                                modifier = Modifier.width(62.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Bottom
                             ) {
@@ -1559,7 +1488,7 @@ class MainActivity : ComponentActivity() {
                                         .coerceAtLeast(8)
 
                                 Text(
-                                    text = "${record.screenTimeMinutes}${uiText("分", "ふん")}",
+                                    text = "${record.screenTimeMinutes}分",
                                     fontSize = 11.sp,
                                     color = textDark
                                 )
@@ -1568,7 +1497,7 @@ class MainActivity : ComponentActivity() {
 
                                 Box(
                                     modifier = Modifier
-                                        .width(24.dp)
+                                        .width(28.dp)
                                         .height(barHeight.dp)
                                         .background(
                                             purple,
@@ -1592,8 +1521,8 @@ class MainActivity : ComponentActivity() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (historyRecords.isNotEmpty()) {
-            historyRecords
+        if (graphRecords.isNotEmpty()) {
+            graphRecords
                 .sortedByDescending { it.date }
                 .forEach { record ->
                     Card(
@@ -1603,9 +1532,7 @@ class MainActivity : ComponentActivity() {
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = lightPurple)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 uiText("日付：${record.date}", "ひづけ：${record.date}"),
                                 color = textDark
@@ -1721,9 +1648,7 @@ class MainActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.width(10.dp))
 
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = member.memberName,
                                 fontSize = 18.sp,
@@ -1810,9 +1735,7 @@ class MainActivity : ComponentActivity() {
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = lightPink)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "親：家族ルームを作成",
                     fontSize = 20.sp,
@@ -1884,9 +1807,7 @@ class MainActivity : ComponentActivity() {
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = cardWhite)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "かぞくのへやにはいる",
                     fontSize = 20.sp,
@@ -1958,9 +1879,7 @@ class MainActivity : ComponentActivity() {
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = lightOrange)
         ) {
-            Column(
-                modifier = Modifier.padding(14.dp)
-            ) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = uiText("現在のコミュニティ設定", "いまのへや"),
                     fontSize = 18.sp,
@@ -2150,12 +2069,9 @@ class MainActivity : ComponentActivity() {
 
         saveLastRecordToLocal()
 
-        if (!isInFamilyRoom) {
-            historyRecords.clear()
-            return
+        if (isInFamilyRoom) {
+            saveScreenTimeOnlyToFirebase()
         }
-
-        saveScreenTimeOnlyToFirebase()
     }
 
     private fun saveLastRecordToLocal() {
@@ -2208,10 +2124,9 @@ class MainActivity : ComponentActivity() {
 
         if (isInFamilyRoom) {
             saveScreenTimeOnlyToFirebase()
-            message = "目標時間を${targetMinutes}分に変更しました"
-        } else {
-            message = "目標時間を${targetMinutes}分に変更しました"
         }
+
+        message = "目標時間を${targetMinutes}分に変更しました"
     }
 
     private fun calculateMaterial(minutes: Long): Long {
@@ -2222,38 +2137,6 @@ class MainActivity : ComponentActivity() {
     private fun calculateSavedTimeForDisplay(minutes: Long): Long {
         val oneDayMinutes = 24L * 60L
         return (oneDayMinutes - minutes).coerceAtLeast(0L)
-    }
-
-    private fun getPandaHealthMessage(): String {
-        return when {
-            screenTimeMinutes <= targetMinutes -> {
-                "げんき！"
-            }
-
-            screenTimeMinutes <= targetMinutes + 30L -> {
-                "ちょっとつかれた"
-            }
-
-            else -> {
-                "ぐったり…"
-            }
-        }
-    }
-
-    private fun getPandaImageResource(): Int {
-        return when {
-            screenTimeMinutes <= targetMinutes -> {
-                R.drawable.panda_good
-            }
-
-            screenTimeMinutes <= targetMinutes + 30L -> {
-                R.drawable.panda_tired
-            }
-
-            else -> {
-                R.drawable.panda_bad
-            }
-        }
     }
 
     private fun addRewardTicketType() {
@@ -2270,12 +2153,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        rewardTicketTypes.add(
-            RewardTicketType(
-                name = name,
-                cost = cost
-            )
-        )
+        rewardTicketTypes.add(RewardTicketType(name = name, cost = cost))
 
         rewardNameInput = ""
         rewardCostInput = ""
@@ -2294,12 +2172,7 @@ class MainActivity : ComponentActivity() {
     private fun craftTicket(ticketName: String, cost: Long) {
         if (materialCount >= cost) {
             materialCount -= cost
-            tickets.add(
-                Ticket(
-                    name = ticketName,
-                    status = "未申請"
-                )
-            )
+            tickets.add(Ticket(name = ticketName, status = "未申請"))
             setMessage("${ticketName}をクラフトしました", "${ticketName}をつくったよ")
             autoSaveCurrentStateSilently()
         } else {
@@ -2320,19 +2193,12 @@ class MainActivity : ComponentActivity() {
         autoSaveCurrentStateSilently()
     }
 
-    private fun approveChildTicket(
-        childIndex: Int,
-        ticketIndex: Int
-    ) {
-        if (childIndex < 0 || childIndex >= childStatusList.size) {
-            return
-        }
+    private fun approveChildTicket(childIndex: Int, ticketIndex: Int) {
+        if (childIndex < 0 || childIndex >= childStatusList.size) return
 
         val child = childStatusList[childIndex]
 
-        if (ticketIndex < 0 || ticketIndex >= child.tickets.size) {
-            return
-        }
+        if (ticketIndex < 0 || ticketIndex >= child.tickets.size) return
 
         if (child.recordDate.isBlank()) {
             message = "保存データがないため承認できません"
@@ -2350,10 +2216,7 @@ class MainActivity : ComponentActivity() {
         updatedTickets[ticketIndex] = ticket.copy(status = "承認済み")
 
         val ticketMapList = updatedTickets.map {
-            mapOf(
-                "name" to it.name,
-                "status" to it.status
-            )
+            mapOf("name" to it.name, "status" to it.status)
         }
 
         val updateData = hashMapOf(
@@ -2369,10 +2232,7 @@ class MainActivity : ComponentActivity() {
             .document(child.recordDate)
             .set(updateData, SetOptions.merge())
             .addOnSuccessListener {
-                childStatusList[childIndex] = child.copy(
-                    tickets = updatedTickets
-                )
-
+                childStatusList[childIndex] = child.copy(tickets = updatedTickets)
                 message = "${child.memberName}の${ticket.name}を承認しました"
             }
             .addOnFailureListener {
@@ -2395,12 +2255,7 @@ class MainActivity : ComponentActivity() {
 
     private fun addTask() {
         if (taskInput.isNotBlank()) {
-            tasks.add(
-                DailyTask(
-                    title = taskInput,
-                    completed = false
-                )
-            )
+            tasks.add(DailyTask(title = taskInput, completed = false))
             setMessage("タスクを追加しました", "やることをふやしたよ")
             taskInput = ""
             autoSaveCurrentStateSilently()
@@ -2423,9 +2278,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun autoSaveCurrentStateSilently() {
-        if (!isInFamilyRoom) {
-            return
-        }
+        if (!isInFamilyRoom) return
 
         saveCurrentStateToFirebase(
             showMessage = false,
@@ -2434,9 +2287,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun saveScreenTimeOnlyToFirebase() {
-        if (!isInFamilyRoom) {
-            return
-        }
+        if (!isInFamilyRoom) return
 
         val date = getYesterdayDateString()
 
@@ -2480,10 +2331,7 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun saveCurrentStateToFirebase(
-        showMessage: Boolean,
-        successMessage: String
-    ) {
+    private fun saveCurrentStateToFirebase(showMessage: Boolean, successMessage: String) {
         if (!isInFamilyRoom) {
             if (showMessage) {
                 setMessage("家族ルームに参加していないためFirebaseには保存できません", "へやにはいっていないから、まだのこせないよ")
@@ -2494,24 +2342,15 @@ class MainActivity : ComponentActivity() {
         val date = getYesterdayDateString()
 
         val ticketList = tickets.map {
-            mapOf(
-                "name" to it.name,
-                "status" to it.status
-            )
+            mapOf("name" to it.name, "status" to it.status)
         }
 
         val rewardList = rewardTicketTypes.map {
-            mapOf(
-                "name" to it.name,
-                "cost" to it.cost
-            )
+            mapOf("name" to it.name, "cost" to it.cost)
         }
 
         val taskList = tasks.map {
-            mapOf(
-                "title" to it.title,
-                "completed" to it.completed
-            )
+            mapOf("title" to it.title, "completed" to it.completed)
         }
 
         val memberData = hashMapOf(
@@ -2562,16 +2401,6 @@ class MainActivity : ComponentActivity() {
                         loadHistoryFromFirebase(false)
                         loadRoomMembers(false)
                     }
-                    .addOnFailureListener {
-                        if (showMessage) {
-                            setMessage("前日データのFirebase保存に失敗しました", "データをのこせなかったよ")
-                        }
-                    }
-            }
-            .addOnFailureListener {
-                if (showMessage) {
-                    setMessage("ルームメンバー情報のFirebase保存に失敗しました", "へやのデータをのこせなかったよ")
-                }
             }
     }
 
@@ -2596,12 +2425,7 @@ class MainActivity : ComponentActivity() {
             val name = map?.get("name") as? String ?: return@forEach
             val status = map["status"] as? String ?: "未申請"
 
-            tickets.add(
-                Ticket(
-                    name = name,
-                    status = status
-                )
-            )
+            tickets.add(Ticket(name = name, status = status))
         }
 
         val rewardList = document.get("rewardTicketTypes") as? List<*>
@@ -2610,12 +2434,7 @@ class MainActivity : ComponentActivity() {
             val name = map?.get("name") as? String ?: return@forEach
             val cost = toLongValue(map["cost"])
 
-            rewardTicketTypes.add(
-                RewardTicketType(
-                    name = name,
-                    cost = cost
-                )
-            )
+            rewardTicketTypes.add(RewardTicketType(name = name, cost = cost))
         }
 
         if (rewardTicketTypes.isEmpty()) {
@@ -2630,12 +2449,7 @@ class MainActivity : ComponentActivity() {
             val title = map?.get("title") as? String ?: return@forEach
             val completed = map["completed"] as? Boolean ?: false
 
-            tasks.add(
-                DailyTask(
-                    title = title,
-                    completed = completed
-                )
-            )
+            tasks.add(DailyTask(title = title, completed = completed))
         }
 
         if (tasks.isEmpty()) {
@@ -2755,12 +2569,7 @@ class MainActivity : ComponentActivity() {
                                 val name = map?.get("name") as? String ?: return@forEach
                                 val status = map["status"] as? String ?: "未申請"
 
-                                ticketsFromRecord.add(
-                                    Ticket(
-                                        name = name,
-                                        status = status
-                                    )
-                                )
+                                ticketsFromRecord.add(Ticket(name = name, status = status))
                             }
 
                             val tasksFromRecord = mutableListOf<DailyTask>()
@@ -2771,12 +2580,7 @@ class MainActivity : ComponentActivity() {
                                 val title = map?.get("title") as? String ?: return@forEach
                                 val completed = map["completed"] as? Boolean ?: false
 
-                                tasksFromRecord.add(
-                                    DailyTask(
-                                        title = title,
-                                        completed = completed
-                                    )
-                                )
+                                tasksFromRecord.add(DailyTask(title = title, completed = completed))
                             }
 
                             childStatusList.add(
@@ -2803,6 +2607,98 @@ class MainActivity : ComponentActivity() {
             .addOnFailureListener {
                 message = "子供の状況を読み込めませんでした"
             }
+    }
+
+    private fun refreshLast7DaysUsageToFirebase() {
+        if (!hasUsageStatsPermission()) {
+            setMessage("使用状況アクセスを許可してください", "スマホのじかんをみられるようにしてね")
+            return
+        }
+
+        message = "スマホから過去7日分を取り直しています"
+
+        val newRecords = mutableListOf<DailyRecord>()
+
+        for (daysAgo in 7 downTo 1) {
+            val date = getDateStringDaysAgo(daysAgo)
+            val minutes = getScreenTimeMinutesForDay(daysAgo)
+
+            if (daysAgo == 1) {
+                screenTimeMinutes = minutes
+                lastSavedDate = date
+                lastSavedScreenTimeMinutes = minutes
+
+                prefs.edit()
+                    .putString("lastSavedDate", date)
+                    .putLong("lastSavedScreenTimeMinutes", minutes)
+                    .putLong("lastSavedMaterialCount", materialCount)
+                    .apply()
+            }
+
+            newRecords.add(
+                DailyRecord(
+                    date = date,
+                    screenTimeMinutes = minutes,
+                    targetMinutes = targetMinutes,
+                    materialCount = materialCount,
+                    ticketCount = tickets.size.toLong()
+                )
+            )
+
+            if (isInFamilyRoom) {
+                val memberRef = db.collection("familyRooms")
+                    .document(getRoomId())
+                    .collection("members")
+                    .document(getMemberId())
+
+                val dailyData = hashMapOf(
+                    "date" to date,
+                    "roomId" to getRoomId(),
+                    "memberId" to getMemberId(),
+                    "memberName" to getMemberName(),
+                    "role" to getRoleName(),
+                    "screenTimeMinutes" to minutes,
+                    "targetMinutes" to targetMinutes,
+                    "materialCount" to materialCount,
+                    "savedBy" to "refreshLast7Days",
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+
+                memberRef
+                    .collection("dailyRecords")
+                    .document(date)
+                    .set(dailyData, SetOptions.merge())
+            }
+        }
+
+        historyRecords.clear()
+        historyRecords.addAll(newRecords.sortedBy { it.date })
+
+        if (isInFamilyRoom) {
+            val memberRef = db.collection("familyRooms")
+                .document(getRoomId())
+                .collection("members")
+                .document(getMemberId())
+
+            val memberData = hashMapOf(
+                "roomId" to getRoomId(),
+                "memberId" to getMemberId(),
+                "memberName" to getMemberName(),
+                "role" to getRoleName(),
+                "screenTimeMinutes" to screenTimeMinutes,
+                "targetMinutes" to targetMinutes,
+                "materialCount" to materialCount,
+                "lastUpdatedDate" to getYesterdayDateString(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            memberRef.set(memberData, SetOptions.merge())
+        }
+
+        setMessage(
+            "スマホから取ったデータでグラフを更新しました",
+            "スマホのデータでぐらふをこうしんしたよ"
+        )
     }
 
     private fun loadHistoryFromFirebase(showMessage: Boolean = true) {
@@ -2835,6 +2731,8 @@ class MainActivity : ComponentActivity() {
                     return@addOnSuccessListener
                 }
 
+                val loadedRecords = mutableListOf<DailyRecord>()
+
                 for (document in result.documents) {
                     val date = document.getString("date") ?: document.id
                     val screenTime = document.getLong("screenTimeMinutes") ?: 0L
@@ -2844,7 +2742,7 @@ class MainActivity : ComponentActivity() {
                     val ticketList = document.get("tickets") as? List<*>
                     val ticketCount = ticketList?.size?.toLong() ?: 0L
 
-                    historyRecords.add(
+                    loadedRecords.add(
                         DailyRecord(
                             date = date,
                             screenTimeMinutes = screenTime,
@@ -2854,6 +2752,13 @@ class MainActivity : ComponentActivity() {
                         )
                     )
                 }
+
+                historyRecords.clear()
+                historyRecords.addAll(
+                    loadedRecords
+                        .distinctBy { it.date }
+                        .sortedBy { it.date }
+                )
 
                 if (showMessage) {
                     setMessage("履歴を読み込みました", "データをよんだよ")
@@ -2968,21 +2873,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun getYesterdayScreenTimeMinutes(): Long {
+        return getScreenTimeMinutesForDay(1)
+    }
+
+    private fun getScreenTimeMinutesForDay(daysAgo: Int): Long {
+        val range = getDayRangeMillis(daysAgo)
+        val startTime = range.first
+        val endTime = range.second
+
+        return getScreenTimeFromUsageEvents(startTime, endTime)
+    }
+
+    private fun getScreenTimeFromUsageEvents(
+        startTime: Long,
+        endTime: Long
+    ): Long {
         val usageStatsManager =
             getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-
-        val calendar = Calendar.getInstance()
-
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-
-        val endTime = calendar.timeInMillis
-
-        calendar.add(Calendar.DAY_OF_YEAR, -1)
-
-        val startTime = calendar.timeInMillis
 
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
@@ -3000,19 +2907,28 @@ class MainActivity : ComponentActivity() {
                 continue
             }
 
+            val eventTime = event.timeStamp.coerceIn(startTime, endTime)
+
             when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND,
-                UsageEvents.Event.ACTIVITY_RESUMED -> {
+                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                    if (currentPackageName != null && currentStartTime > 0L) {
+                        val usedTime = eventTime - currentStartTime
+
+                        if (usedTime > 0L) {
+                            totalTime += usedTime
+                        }
+                    }
+
                     currentPackageName = packageName
-                    currentStartTime = event.timeStamp
+                    currentStartTime = eventTime
                 }
 
-                UsageEvents.Event.MOVE_TO_BACKGROUND,
-                UsageEvents.Event.ACTIVITY_PAUSED,
-                UsageEvents.Event.ACTIVITY_STOPPED -> {
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
                     if (currentPackageName == packageName && currentStartTime > 0L) {
-                        if (event.timeStamp > currentStartTime) {
-                            totalTime += event.timeStamp - currentStartTime
+                        val usedTime = eventTime - currentStartTime
+
+                        if (usedTime > 0L) {
+                            totalTime += usedTime
                         }
 
                         currentPackageName = null
@@ -3022,18 +2938,44 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        if (currentPackageName != null && currentStartTime > 0L && endTime > currentStartTime) {
-            totalTime += endTime - currentStartTime
+        if (currentPackageName != null && currentStartTime > 0L) {
+            val usedTime = endTime - currentStartTime
+
+            if (usedTime > 0L) {
+                totalTime += usedTime
+            }
         }
 
         return totalTime / 1000 / 60
     }
 
-    private fun shouldIgnorePackage(packageName: String): Boolean {
-        if (packageName == this.packageName) {
-            return true
-        }
+    private fun getDayRangeMillis(daysAgo: Int): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
 
+        calendar.add(Calendar.DAY_OF_YEAR, -daysAgo)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+
+        val startTime = calendar.timeInMillis
+
+        calendar.add(Calendar.DAY_OF_YEAR, 1)
+
+        val endTime = calendar.timeInMillis
+
+        return Pair(startTime, endTime)
+    }
+
+    private fun getDateStringDaysAgo(daysAgo: Int): String {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_YEAR, -daysAgo)
+
+        return SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
+            .format(calendar.time)
+    }
+
+    private fun shouldIgnorePackage(packageName: String): Boolean {
         val ignorePackages = listOf(
             "com.android.systemui",
             "com.google.android.apps.nexuslauncher",
@@ -3044,7 +2986,6 @@ class MainActivity : ComponentActivity() {
             "com.android.launcher",
             "com.google.android.permissioncontroller",
             "com.android.permissioncontroller",
-            "com.android.settings",
             "com.google.android.apps.wellbeing"
         )
 
@@ -3052,11 +2993,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun getYesterdayDateString(): String {
-        val calendar = Calendar.getInstance()
-        calendar.add(Calendar.DAY_OF_YEAR, -1)
-
-        return SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
-            .format(calendar.time)
+        return getDateStringDaysAgo(1)
     }
 
     private fun getRoomId(): String {
@@ -3104,6 +3041,22 @@ class MainActivity : ComponentActivity() {
             "承認済み" -> "つかえる"
             "使用済み" -> "つかった"
             else -> status
+        }
+    }
+
+    private fun getPandaHealthMessage(): String {
+        return when {
+            screenTimeMinutes <= targetMinutes -> "げんき！"
+            screenTimeMinutes <= targetMinutes + 30L -> "ちょっとつかれた"
+            else -> "ぐったり…"
+        }
+    }
+
+    private fun getPandaImageResource(): Int {
+        return when {
+            screenTimeMinutes <= targetMinutes -> R.drawable.panda_good
+            screenTimeMinutes <= targetMinutes + 30L -> R.drawable.panda_tired
+            else -> R.drawable.panda_bad
         }
     }
 
